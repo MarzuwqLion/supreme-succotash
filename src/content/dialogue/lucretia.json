@@ -1,0 +1,334 @@
+[
+  {
+    "id": "lucretia_1",
+    "speaker": "lucretia",
+    "stage": 1,
+    "personality": "Cold, exact Porto informant who trades only in facts and money; despises speeches, flattery and wasted time.",
+    "openings": [
+      {
+        "when": { "minSuspicion": 50 },
+        "text": "Half the street watched you walk over here, and the Federation has the district on edge. You have one minute."
+      },
+      {
+        "text": "You're the one asking questions around the Porto. Asking questions is how people end up on a truck. What do you want?"
+      }
+    ],
+    "exchanges": [
+      {
+        "prompt": "I don't do causes. I do information, and information costs. Who sent you?",
+        "replies": [
+          {
+            "id": "lucretia_1_1a",
+            "text": "People who want Napoli free. People like you, if you'd let yourself admit it.",
+            "tier": "bad",
+            "reaction": "Don't tell me what I am. You don't know me."
+          },
+          {
+            "id": "lucretia_1_1b",
+            "text": "Friends of friends. Ask around. You'll hear I pay.",
+            "tier": "good",
+            "reaction": "I have asked. Apparently you do."
+          },
+          {
+            "id": "lucretia_1_1c",
+            "text": "Nobody you want to know. I'm here to buy, and I don't waste a seller's time.",
+            "tier": "best",
+            "reaction": "Good answer. Short ones usually are."
+          },
+          {
+            "id": "lucretia_1_1d",
+            "text": "Here's {cost}. Call it a deposit, not an answer.",
+            "tier": "bribe",
+            "reaction": "A deposit. All right, you've bought yourself one conversation."
+          }
+        ]
+      },
+      {
+        "prompt": "Everyone in this city sells something. Legionaries sell passes, the prefecture sells names. Why should I sell to you and not to them?",
+        "replies": [
+          {
+            "id": "lucretia_1_2a",
+            "text": "Because I won't come back with soldiers, and I don't haggle over good information.",
+            "tier": "best",
+            "reaction": "Two things the prefecture can't promise. Noted."
+          },
+          {
+            "id": "lucretia_1_2b",
+            "text": "Because if you sell to them, people like me will remember it.",
+            "tier": "insult",
+            "reaction": "Threats. From someone standing alone in my street."
+          },
+          {
+            "id": "lucretia_1_2c",
+            "text": "I don't know. Maybe you shouldn't.",
+            "tier": "neutral",
+            "reaction": "At least you're not pretending."
+          }
+        ]
+      },
+      {
+        "prompt": "Last thing. Do you know how many trucks leave the Castel in a week? I do. I count them. Why would someone like you care?",
+        "replies": [
+          {
+            "id": "lucretia_1_3a",
+            "text": "Because what's in those trucks is why I'm in Napoli.",
+            "tier": "good",
+            "reaction": "Is it. Everyone cares about the trucks until it costs them something."
+          },
+          {
+            "id": "lucretia_1_3b",
+            "text": "You don't need to believe I care. Tell me the count, and watch what I do with it.",
+            "tier": "best",
+            "reaction": "Fourteen, last week. We'll see what you do with it."
+          },
+          {
+            "id": "lucretia_1_3c",
+            "text": "You count them because you care. I can tell.",
+            "tier": "bad",
+            "reaction": "I count them because counts sell. Don't make it a story."
+          }
+        ]
+      }
+    ],
+    "closings": {
+      "success": "Fine. You've earned an answer without paying for it. Don't get used to that.",
+      "failure": "We're done. Walk away, and don't be surprised who I describe you to.",
+      "rebuff": "Not yet. I don't sell to strangers. Come back, and we'll see if you're still one.",
+      "bribed": "Money is the one thing in this city that doesn't lie. Listen carefully. I won't repeat it."
+    }
+  },
+  {
+    "id": "lucretia_2",
+    "speaker": "lucretia",
+    "stage": 2,
+    "personality": "The informant on a second meeting: transactional, testing whether the agent is worth the risk; rewards fair trades and precision, punishes sentiment and pressure.",
+    "openings": [
+      {
+        "when": { "lastResult": "bribed" },
+        "text": "The one who pays. Money buys answers, not friends. What are you buying tonight?"
+      },
+      {
+        "when": { "lastResult": "failure" },
+        "text": "You came back. Most people I turn away don't. That's either brave or stupid."
+      },
+      {
+        "when": { "lastResult": "rebuff" },
+        "text": "Still breathing. Good. I wondered if you'd make it back."
+      },
+      {
+        "text": "You again. Sit. Keep your back to the window."
+      }
+    ],
+    "exchanges": [
+      {
+        "prompt": "I didn't sell your description to anyone. That cost me money. So what are you bringing me in return?",
+        "replies": [
+          {
+            "id": "lucretia_2_1a",
+            "text": "A small one. The Porto gate legionary takes Federation vouchers to look away.",
+            "tier": "good",
+            "reaction": "Small, but true, and free. It's a start."
+          },
+          {
+            "id": "lucretia_2_1b",
+            "text": "My gratitude. That should count for something.",
+            "tier": "bad",
+            "reaction": "Gratitude doesn't pay rent."
+          },
+          {
+            "id": "lucretia_2_1c",
+            "text": "Federation patrol changes in the Porto. Times and routes. Yours, no charge.",
+            "tier": "best",
+            "reaction": "That's worth something. You've done this before."
+          },
+          {
+            "id": "lucretia_2_1d",
+            "text": "{cost}, and you tell me what I need without the bargaining.",
+            "tier": "bribe",
+            "reaction": "Simple. I like simple."
+          }
+        ]
+      },
+      {
+        "prompt": "The trucks take people to the Castel, and nobody comes out. I keep a list of who goes in. I'm looking for one name. Seen anything I can't buy?",
+        "replies": [
+          {
+            "id": "lucretia_2_2a",
+            "text": "I have their transport manifest. Fourteen names out of the Castel, routed to Pier 9.",
+            "tier": "intel",
+            "requiresIntel": "transportManifest",
+            "reaction": "He's not on it. So he's already gone, or he's still in there."
+          },
+          {
+            "id": "lucretia_2_2b",
+            "text": "Not yet. Give me the name, and I'll look for it where you can't go.",
+            "tier": "best",
+            "reaction": "Not yet, maybe next time. But that's the right offer."
+          },
+          {
+            "id": "lucretia_2_2c",
+            "text": "One name? Everyone's lost someone. Why does yours matter more?",
+            "tier": "insult",
+            "reaction": "You'd better hope you never find out."
+          },
+          {
+            "id": "lucretia_2_2d",
+            "text": "No. Nothing.",
+            "tier": "neutral",
+            "reaction": "Then I'm not sure why we're talking."
+          }
+        ]
+      },
+      {
+        "prompt": "You're useful. That makes you dangerous to know. Give me one reason not to sell you to Hale's people when you walk out.",
+        "replies": [
+          {
+            "id": "lucretia_2_3a",
+            "text": "Because I'm worth more to you coming back than sold once.",
+            "tier": "best",
+            "reaction": "Repeat business. You understand me better than you did."
+          },
+          {
+            "id": "lucretia_2_3b",
+            "text": "Because it would be wrong. You're not like them.",
+            "tier": "bad",
+            "reaction": "You've no idea what I'm like."
+          },
+          {
+            "id": "lucretia_2_3c",
+            "text": "Because Hale's people pay late and lie about the price.",
+            "tier": "good",
+            "reaction": "They do. That's true."
+          }
+        ]
+      }
+    ],
+    "closings": {
+      "success": "Fine. You've earned it. Here's what I have.",
+      "failure": "No. I've given you enough of my time. Walk, and hope nobody asks me about you.",
+      "rebuff": "Better. Not enough. Come back and keep surprising me.",
+      "bribed": "Paid in full. That's the only kind of trust I deal in tonight. Listen."
+    }
+  },
+  {
+    "id": "lucretia_3",
+    "speaker": "lucretia",
+    "stage": 3,
+    "personality": "The informant with a missing brother; respects competence and honesty without pity, and is starting to want an ally more than a buyer.",
+    "openings": [
+      {
+        "when": { "lastResult": "bribed" },
+        "text": "You paid last time. You could keep paying. Or you could give me a reason to help you for nothing."
+      },
+      {
+        "when": { "lastResult": "failure" },
+        "text": "After last time, I nearly sent someone else to meet you. Talk."
+      },
+      {
+        "when": { "minMeetings": 3, "minTrust": 30 },
+        "text": "You keep coming back. I've stopped selling your description to anyone. I wanted you to know that."
+      },
+      {
+        "when": { "minTrust": 30 },
+        "text": "Sit down. I held something back for you. That's not something I do."
+      },
+      {
+        "when": { "lastResult": "rebuff" },
+        "text": "You came back. People usually don't, after the second time. Sit."
+      },
+      {
+        "text": "You again. I'm starting to expect you. I don't like expecting people."
+      }
+    ],
+    "exchanges": [
+      {
+        "prompt": "The name I'm looking for is Tito Esposito. My brother. They took him at the fish market in the spring. Every time we meet, I'll ask. Anything?",
+        "replies": [
+          {
+            "id": "lucretia_3_1a",
+            "text": "He's probably dead. Most of them are.",
+            "tier": "insult",
+            "reaction": "Careful. I know what probably means."
+          },
+          {
+            "id": "lucretia_3_1b",
+            "text": "Nothing yet. I won't pretend otherwise.",
+            "tier": "good",
+            "reaction": "Good. I've had enough people pretend."
+          },
+          {
+            "id": "lucretia_3_1c",
+            "text": "His name might be on this. A transport manifest from the Castel, with names and blood types.",
+            "tier": "intel",
+            "requiresIntel": "transportManifest",
+            "reaction": "Why would they need blood types? Give it to me, I need to read every line."
+          },
+          {
+            "id": "lucretia_3_1d",
+            "text": "Nothing yet. But his name is with my people now. If he surfaces, you'll know first.",
+            "tier": "best",
+            "reaction": "First. All right, that's worth more than you know."
+          }
+        ]
+      },
+      {
+        "prompt": "For a year after he went, I sold information to the Federation. I thought it would buy him back. Does that disgust you?",
+        "replies": [
+          {
+            "id": "lucretia_3_2a",
+            "text": "No. You did what you thought would bring him home. Now you're doing it with me.",
+            "tier": "best",
+            "reaction": "You don't flatter and you don't preach. I can work with that."
+          },
+          {
+            "id": "lucretia_3_2b",
+            "text": "It does. People died for what you sold.",
+            "tier": "bad",
+            "reaction": "Yes, I know. I count those too."
+          },
+          {
+            "id": "lucretia_3_2c",
+            "text": "It's not my place to judge. I'm here for what you know now.",
+            "tier": "good",
+            "reaction": "Practical. Fine."
+          },
+          {
+            "id": "lucretia_3_2d",
+            "text": "I'm not here to judge. Here's {cost}. Let's keep it simple between us.",
+            "tier": "bribe",
+            "reaction": "You'd think I'd prefer simple. Fine."
+          }
+        ]
+      },
+      {
+        "prompt": "If I help you properly, not for money, it's my neck as much as yours. Tell me this goes somewhere.",
+        "replies": [
+          {
+            "id": "lucretia_3_3a",
+            "text": "It goes to people who've been fighting the Federation much longer than I have.",
+            "tier": "good",
+            "reaction": "Longer isn't better. But fine."
+          },
+          {
+            "id": "lucretia_3_3b",
+            "text": "I can't promise anything.",
+            "tier": "neutral",
+            "reaction": "No. Nobody can."
+          },
+          {
+            "id": "lucretia_3_3c",
+            "text": "It goes to the Castel. To Hale. To whoever put your brother on that truck.",
+            "tier": "best",
+            "reaction": "Then we want the same man. Good."
+          }
+        ]
+      }
+    ],
+    "closings": {
+      "success": "All right. Not for money this time. Here's what I have.",
+      "failure": "No. I thought you were different. Go, before I decide you're not.",
+      "rebuff": "Almost. I'm close to trusting you, and that frightens me more than Hale does. Come back.",
+      "bribed": "Money again. Fine, it works. But I'd hoped we were past that."
+    }
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "id": "patrolCodes",
+    "title": "Patrol authentication: Napoli sector",
+    "body": "Current rotation: challenge LANTERN, response SIX-TWO, valid at all checkpoints until the next rotation. Personnel on detached Directorate duty identify with the full pair and are not to be searched or logged. Do not transmit codes in clear. Destroy after memorizing."
+  },
+  {
+    "id": "halesSchedule",
+    "title": "Duty roster: Commander Hale",
+    "body": "The commander inspects the Castel garrison on the same loop every shift: gatehouse, east wall, armory, then the holding block, where he signs off the night's intake himself. He keeps to the minute, with his escort a few paces behind. Staff are reminded that the commander does not tolerate delays."
+  },
+  {
+    "id": "transportManifest",
+    "title": "Transport manifest: Castel holding to Pier 9",
+    "body": "Fourteen names from the Castel holding block, each with age, blood type and tissue match, routed to processing at Pier 9. Six are stamped N-grade: deliver alive and sedated, no damage above the neck, billed to Directorate Systems rather than Medical. A note in pen reads: N-grade is the priority. Under 30 where possible."
+  }
+]

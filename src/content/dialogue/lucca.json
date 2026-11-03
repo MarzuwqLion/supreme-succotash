@@ -1,0 +1,322 @@
+[
+  {
+    "id": "lucca_1",
+    "speaker": "lucca",
+    "stage": 1,
+    "personality": "Old Quartieri gunsmith, once armorer to the Imperial cohorts, quietly with the cause; respects his craft and plain honesty, bristles at swagger and waste.",
+    "openings": [
+      {
+        "when": { "minSuspicion": 50 },
+        "text": "In. Quickly, and shut the door. The district's crawling with patrols tonight, and I don't need them looking at my shop."
+      },
+      {
+        "text": "Shop's closed. You're not from here, and you're not Federation. Come in before someone sees you on my step."
+      }
+    ],
+    "exchanges": [
+      {
+        "prompt": "My father made rifles for the Imperial cohorts. So did I, for forty years. Now I fix Federation pistols so they leave me alone. What do you want?",
+        "replies": [
+          {
+            "id": "lucca_1_1a",
+            "text": "Ammunition, medkits, smoke. And I can pay.",
+            "tier": "good",
+            "reaction": "Straight to it. All right."
+          },
+          {
+            "id": "lucca_1_1b",
+            "text": "Supplies. And to meet the man who still keeps a cohort armorer's bench in the back.",
+            "tier": "best",
+            "reaction": "Not many people know about that bench. Sit down."
+          },
+          {
+            "id": "lucca_1_1c",
+            "text": "Whatever you've got. I don't care if it's junk, I just need it fast.",
+            "tier": "bad",
+            "reaction": "Nothing in this shop is junk."
+          }
+        ]
+      },
+      {
+        "prompt": "Four families on this street have lost someone to the trucks this year. The Federation calls it resettlement. Is that what your people are fighting?",
+        "replies": [
+          {
+            "id": "lucca_1_2a",
+            "text": "Yes. We're trying to find out where they take them, and stop it.",
+            "tier": "best",
+            "reaction": "Good, somebody should. The Ferraro boy was seventeen."
+          },
+          {
+            "id": "lucca_1_2b",
+            "text": "I can't talk about what we're fighting.",
+            "tier": "neutral",
+            "reaction": "Of course not. Never mind, then."
+          },
+          {
+            "id": "lucca_1_2c",
+            "text": "We're fighting to win. People get lost in a war.",
+            "tier": "bad",
+            "reaction": "People. You say it like it's a number."
+          }
+        ]
+      },
+      {
+        "prompt": "One more thing. Whatever I sell you will be used. I need to know it'll be used well.",
+        "replies": [
+          {
+            "id": "lucca_1_3a",
+            "text": "I'll only use it when there's no other way.",
+            "tier": "good",
+            "reaction": "Everyone says that. I hope you mean it."
+          },
+          {
+            "id": "lucca_1_3b",
+            "text": "With respect, old man, what I do with it is my business.",
+            "tier": "insult",
+            "reaction": "With respect, it's my name stamped on the barrel."
+          },
+          {
+            "id": "lucca_1_3c",
+            "text": "It'll go where it counts. And I'll come back and tell you what it did.",
+            "tier": "best",
+            "reaction": "Do that. I'd like to know."
+          }
+        ]
+      }
+    ],
+    "closings": {
+      "success": "All right. Here's what I've got. Take what you need, and go out the back.",
+      "failure": "No. I don't sell to people who talk like that. Out the back, and remember where you are next time.",
+      "rebuff": "Not today. Come back when you've thought about who you're talking to."
+    }
+  },
+  {
+    "id": "lucca_2",
+    "speaker": "lucca",
+    "stage": 2,
+    "personality": "The old gunsmith on second acquaintance; worried about Federation inspectors and his missing neighbors, he wants discretion and the unvarnished truth.",
+    "openings": [
+      {
+        "when": { "lastResult": "failure" },
+        "text": "You. I remember what you said last time. Say something better or leave."
+      },
+      {
+        "when": { "lastResult": "rebuff" },
+        "text": "Back again. Good. I wasn't sure you would be."
+      },
+      {
+        "when": { "minTrust": 60 },
+        "text": "There you are. I put a few things aside for you. Friend's price, don't argue."
+      },
+      {
+        "when": { "lastResult": "success" },
+        "text": "You made it through. I wondered. Come in, shut the door."
+      },
+      {
+        "text": "You again. Come in, quickly."
+      }
+    ],
+    "exchanges": [
+      {
+        "prompt": "Federation inspectors came on Tuesday. Counted my lathes and asked who I sell to. I told them nobody. Have you told anyone about me?",
+        "replies": [
+          {
+            "id": "lucca_2_1a",
+            "text": "A few people. They're on our side.",
+            "tier": "bad",
+            "reaction": "A few people. That's how shops get burned."
+          },
+          {
+            "id": "lucca_2_1b",
+            "text": "Only my handler, and only that there's a gunsmith. No name.",
+            "tier": "good",
+            "reaction": "No name. All right, I can live with that."
+          },
+          {
+            "id": "lucca_2_1c",
+            "text": "If you're that scared, maybe you should stop selling.",
+            "tier": "insult",
+            "reaction": "Scared. I was fixing rifles under shellfire before you were born."
+          },
+          {
+            "id": "lucca_2_1d",
+            "text": "No one. You're not in any report, and you won't be.",
+            "tier": "best",
+            "reaction": "I believe you. I don't know why, but I do."
+          }
+        ]
+      },
+      {
+        "prompt": "A woman from the street came by. Her son was taken in the spring. She asked if I'd heard where they go. Have you?",
+        "replies": [
+          {
+            "id": "lucca_2_2a",
+            "text": "No.",
+            "tier": "neutral",
+            "reaction": "No. Nobody has."
+          },
+          {
+            "id": "lucca_2_2b",
+            "text": "Not much. They're held at the Castel first. We know that.",
+            "tier": "good",
+            "reaction": "The Castel. When I was a boy, it was a museum."
+          },
+          {
+            "id": "lucca_2_2c",
+            "text": "Not enough yet. But I'm looking, and I won't lie to her or to you.",
+            "tier": "best",
+            "reaction": "That's more than the prefecture ever told her."
+          }
+        ]
+      },
+      {
+        "prompt": "I'm too old to fight. But I could do more than sell you cartridges. Tell me what would actually help.",
+        "replies": [
+          {
+            "id": "lucca_2_3a",
+            "text": "Keep the shop open and your head down. A safe door in Napoli is worth more than a rifle.",
+            "tier": "best",
+            "reaction": "A safe door. My father would have liked that."
+          },
+          {
+            "id": "lucca_2_3b",
+            "text": "Come with us. Pick up a rifle. We need everyone.",
+            "tier": "bad",
+            "reaction": "With these hands? Don't be foolish."
+          },
+          {
+            "id": "lucca_2_3c",
+            "text": "Listen. People talk in gun shops. Tell me what you hear.",
+            "tier": "good",
+            "reaction": "They do talk. I'll listen harder."
+          }
+        ]
+      }
+    ],
+    "closings": {
+      "success": "Take what you need. And come back. I mean that.",
+      "failure": "Not today. Something about you today, I don't like it. Go.",
+      "rebuff": "I'll think about it. Come back next time and we'll see."
+    }
+  },
+  {
+    "id": "lucca_3",
+    "speaker": "lucca",
+    "stage": 3,
+    "personality": "The gunsmith as an old friend; growing frail and frightened for his street, he wants honesty, proof the agent is a real person, and to know his work outlives him.",
+    "openings": [
+      {
+        "when": { "lastResult": "failure" },
+        "text": "After last time I nearly didn't open the door. Talk, and choose your words."
+      },
+      {
+        "when": { "lastResult": "rebuff" },
+        "text": "You came back. I hoped you would. Let's try that again."
+      },
+      {
+        "when": { "minMeetings": 3, "minTrust": 60 },
+        "text": "You keep coming back. Good. Every time that door opens and it's you, I know they haven't got you yet."
+      },
+      {
+        "when": { "minMeetings": 3 },
+        "text": "You keep coming back. Either you're a friend or you're desperate. Sit down and tell me which."
+      },
+      {
+        "when": { "minTrust": 60 },
+        "text": "Come in. Your things are on the bench. I've been keeping them back from everyone else."
+      },
+      {
+        "text": "Come in. Door shut, voice down. You know how it works by now."
+      }
+    ],
+    "exchanges": [
+      {
+        "prompt": "Every week there are more trucks and fewer faces on this street. Tell me something true. How is it out there?",
+        "replies": [
+          {
+            "id": "lucca_3_1a",
+            "text": "Worse in the Porto. Better in the Quartieri. We're holding.",
+            "tier": "good",
+            "reaction": "Holding. That's something."
+          },
+          {
+            "id": "lucca_3_1b",
+            "text": "Bad. They're taking more people, and we still don't know everything. That's the truth.",
+            "tier": "best",
+            "reaction": "Thank you for not dressing it up."
+          },
+          {
+            "id": "lucca_3_1c",
+            "text": "Fine. Nothing for you to worry about.",
+            "tier": "bad",
+            "reaction": "Don't manage me. I'm not one of the prefect's clients."
+          },
+          {
+            "id": "lucca_3_1d",
+            "text": "I found a transport manifest. It lists people by blood type and tissue match, bound for Pier 9.",
+            "tier": "intel",
+            "requiresIntel": "transportManifest",
+            "reaction": "Tissue match is a surgeon's word, not a quartermaster's. What are they doing to those people?"
+          }
+        ]
+      },
+      {
+        "prompt": "You've never told me your real name. I don't need it. But I'd like to know you still have one.",
+        "replies": [
+          {
+            "id": "lucca_3_2a",
+            "text": "Names get people killed. Why would you even ask?",
+            "tier": "bad",
+            "reaction": "Because I'm old, and I like knowing who I'm worrying about."
+          },
+          {
+            "id": "lucca_3_2b",
+            "text": "I do. It just isn't the one on my papers.",
+            "tier": "good",
+            "reaction": "Good. Keep it somewhere safe."
+          },
+          {
+            "id": "lucca_3_2c",
+            "text": "I have one. When this is over, I'll walk in the front door and tell you myself.",
+            "tier": "best",
+            "reaction": "I'll hold you to that. Make sure there is an over."
+          }
+        ]
+      },
+      {
+        "prompt": "My hands shake now. Some days I can't finish a trigger group. One day you'll come and the shop will be shut. What then?",
+        "replies": [
+          {
+            "id": "lucca_3_3a",
+            "text": "Then teach someone first. Your work shouldn't end with you. Napoli will need it after.",
+            "tier": "best",
+            "reaction": "There's a girl on the street who watches me work. Maybe."
+          },
+          {
+            "id": "lucca_3_3b",
+            "text": "Then I'll find another gunsmith.",
+            "tier": "neutral",
+            "reaction": "Honest, at least. Cold, but honest."
+          },
+          {
+            "id": "lucca_3_3c",
+            "text": "Then I'll make sure people know what you did for us.",
+            "tier": "good",
+            "reaction": "That's kind. I didn't do it to be remembered."
+          },
+          {
+            "id": "lucca_3_3d",
+            "text": "Then you'd better give me a discount while you still can.",
+            "tier": "insult",
+            "reaction": "That was a cheap thing to say. Even for this city."
+          }
+        ]
+      }
+    ],
+    "closings": {
+      "success": "Take what you need. Stay alive. That's the only payment I care about.",
+      "failure": "Not today. I'm too tired for this. Go.",
+      "rebuff": "Closer. Not there yet. Come back and we'll talk again."
+    }
+  }
+]

@@ -1,0 +1,43 @@
+{
+  "firstEncounter": [
+    "So you're the one. Your file is thin. I'll see that it's completed.",
+    "Another local hero. I've processed hundreds of you, and the paperwork is always the same.",
+    "You've cost me a week of incident reports. Let's close the matter."
+  ],
+  "grudge1": [
+    "You again. Last time you left on a stretcher. I signed the report myself.",
+    "I've added a guard to this detail on your account. Consider it a courtesy.",
+    "Back already. Your employers must be very forgiving, or very short of people."
+  ],
+  "grudge2": [
+    "Twice now. Your face has been printed and issued to every checkpoint in the city.",
+    "I've stopped filing reports on you. You have a folder now.",
+    "More escorts, more paperwork. You're becoming an expense, and I know how to cut expenses."
+  ],
+  "rematch": [
+    "You beat me once. I studied the report. That's the difference between us and your Empire.",
+    "Nine days in a field hospital. Command reviewed the incident and kept me in post. Think about what that means.",
+    "Last time was a lapse in procedure. The procedure has been revised."
+  ],
+  "combat": [
+    "Contain it. Don't make a mess.",
+    "Flank left. Keep it away from the holding block.",
+    "Take it alive if you can. Intact is worth more.",
+    "Suppress and close. Standard drill."
+  ],
+  "lowHealth": [
+    "Noted. Adjusting.",
+    "You've made your point. Now I'll make mine.",
+    "Medic to my position. No, belay that. Finish this first."
+  ],
+  "agentExtracted": [
+    "Let them go. We'll process them next time.",
+    "Log the time. Hostile withdrew under fire.",
+    "Run back to your base. I'll be here, with another guard."
+  ],
+  "defeated": [
+    "This changes nothing. The trucks run on a schedule, not on me.",
+    "There are a thousand of me. And every one keeps better records.",
+    "File it... properly."
+  ]
+}

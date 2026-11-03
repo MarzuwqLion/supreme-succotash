@@ -1,0 +1,314 @@
+[
+  {
+    "id": "leg_veteran",
+    "speaker": "legionary",
+    "personality": "Tired veteran of the old Third Cohort; resents taking orders from the Federation, respects plain talk and local pride.",
+    "openings": [
+      {
+        "when": { "minSuspicion": 50 },
+        "text": "Hold it there. The radio's been going on about a stranger all night, and you look like a stranger."
+      },
+      {
+        "text": "You. Papers. And don't tell me you're Federation, I can smell a local from here."
+      }
+    ],
+    "exchanges": [
+      {
+        "prompt": "Twenty-two years in the Third Cohort, and now I check papers for the Federation. So what are you doing on my street after curfew?",
+        "replies": [
+          {
+            "id": "leg_veteran_1a",
+            "text": "Going home. My mother's off Via dei Tribunali, and they moved the curfew again.",
+            "tier": "good",
+            "reaction": "They move it every week. Keeps us guessing."
+          },
+          {
+            "id": "leg_veteran_1b",
+            "text": "The Federation keeps these streets safe. You should be proud to serve it.",
+            "tier": "bad",
+            "reaction": "Proud. Is that what they told you to say?"
+          },
+          {
+            "id": "leg_veteran_1c",
+            "text": "Same as you. Doing what the Federation tells me and hating every minute of it.",
+            "tier": "best",
+            "reaction": "Ha. At least you're honest about it."
+          },
+          {
+            "id": "leg_veteran_1d",
+            "text": "Lantern, six-two. Detached duty. Run it through your relay if you like.",
+            "tier": "intel",
+            "requiresIntel": "patrolCodes",
+            "reaction": "That's this week's code. You could have led with it."
+          }
+        ]
+      },
+      {
+        "prompt": "The Third used to mean something. Now we stand at barriers while their trucks drive through without stopping. Know what's in those trucks?",
+        "replies": [
+          {
+            "id": "leg_veteran_2a",
+            "text": "No. But I know the old Third would never have waved them through without a look.",
+            "tier": "best",
+            "reaction": "We wouldn't have. My centurion would have opened every one."
+          },
+          {
+            "id": "leg_veteran_2b",
+            "text": "Supplies, I'd guess. Not my business.",
+            "tier": "neutral",
+            "reaction": "That's what everyone says. Not my business."
+          },
+          {
+            "id": "leg_veteran_2c",
+            "text": "No idea. But here's {cost} for a man who doesn't ask either.",
+            "tier": "bribe",
+            "reaction": "I'll take it. Doesn't mean I like you."
+          },
+          {
+            "id": "leg_veteran_2d",
+            "text": "If the Third had fought harder, the Federation wouldn't be here.",
+            "tier": "insult",
+            "reaction": "Say that again. Go on, say it again."
+          }
+        ]
+      },
+      {
+        "prompt": "Last question, so think first. If I let you walk and you're trouble, it's my neck. Why should I care about yours?",
+        "replies": [
+          {
+            "id": "leg_veteran_3a",
+            "text": "Because I'll report you if you don't.",
+            "tier": "bad",
+            "reaction": "Report me to who? The Federation would thank me for locking you up."
+          },
+          {
+            "id": "leg_veteran_3b",
+            "text": "You don't have to. But you didn't serve twenty-two years to arrest Neapolitans for them.",
+            "tier": "best",
+            "reaction": "No. I didn't."
+          },
+          {
+            "id": "leg_veteran_3c",
+            "text": "Because I'll be gone before your shift ends, and nobody will know you stopped me.",
+            "tier": "good",
+            "reaction": "That's not a reason. But it helps."
+          }
+        ]
+      }
+    ],
+    "closings": {
+      "success": "Go on, then. I never saw you, and you never saw me.",
+      "failure": "That's enough. Hands on your head. Checkpoint four, I've got one here!"
+    }
+  },
+  {
+    "id": "leg_recruit",
+    "speaker": "legionary",
+    "personality": "Nervous recruit three weeks into the job; terrified of his Federation sergeant, calmed by reassurance and anything that sounds like proper procedure.",
+    "openings": [
+      {
+        "when": { "minSuspicion": 50 },
+        "text": "Stop! Stop there. They said on the radio to stop everyone. Please don't move."
+      },
+      {
+        "text": "Halt. Um, citizen, halt. Identity card, please. I have to check everyone. It's the rules."
+      }
+    ],
+    "exchanges": [
+      {
+        "prompt": "It's my third week. If the sergeant sees me let someone through without a card, I'm finished. Where's your card?",
+        "replies": [
+          {
+            "id": "leg_recruit_1a",
+            "text": "Left it at work. I know. Write me up for it, I'll pay the fine.",
+            "tier": "good",
+            "reaction": "A fine, yes. There's a form for that, I think."
+          },
+          {
+            "id": "leg_recruit_1b",
+            "text": "You're doing it right. Breathe. Nobody's watching, and I'm not going to make trouble for you.",
+            "tier": "best",
+            "reaction": "Okay. Thank you, nobody ever says that to me."
+          },
+          {
+            "id": "leg_recruit_1c",
+            "text": "Third week? Run home to your mother, boy.",
+            "tier": "insult",
+            "reaction": "I don't have to take that. I could call this in."
+          },
+          {
+            "id": "leg_recruit_1d",
+            "text": "Lantern, six-two. Detached duty. Your sergeant will tell you that means no search.",
+            "tier": "intel",
+            "requiresIntel": "patrolCodes",
+            "reaction": "Lantern six-two, that's on the card they gave us. Sorry, I didn't know."
+          }
+        ]
+      },
+      {
+        "prompt": "They told us anyone out after curfew could be a saboteur. You don't look like one. What do saboteurs look like?",
+        "replies": [
+          {
+            "id": "leg_recruit_2a",
+            "text": "I couldn't tell you.",
+            "tier": "neutral",
+            "reaction": "Nobody can. That's what scares me."
+          },
+          {
+            "id": "leg_recruit_2b",
+            "text": "Exactly like me. You'd better shoot me now.",
+            "tier": "bad",
+            "reaction": "Don't say that! Don't joke about that, please."
+          },
+          {
+            "id": "leg_recruit_2c",
+            "text": "I'd guess they don't stop when a legionary tells them to.",
+            "tier": "good",
+            "reaction": "That's true. You did stop."
+          },
+          {
+            "id": "leg_recruit_2d",
+            "text": "Like people who run. I'm standing here answering your questions. Put that in your log.",
+            "tier": "best",
+            "reaction": "Standing still, answering questions. Yes, I can write that."
+          }
+        ]
+      },
+      {
+        "prompt": "My mother says the Federation are taking people. My sergeant says that's rebel talk. If I let you go and you're a rebel, they'll take me instead.",
+        "replies": [
+          {
+            "id": "leg_recruit_3a",
+            "text": "Nobody's taking you. Log me as a cleared civilian, curfew warning given. That's all this is.",
+            "tier": "best",
+            "reaction": "Cleared civilian, curfew warning. That's a real category, that's fine."
+          },
+          {
+            "id": "leg_recruit_3b",
+            "text": "Your mother's right. Desert while you still can.",
+            "tier": "bad",
+            "reaction": "Desert? Are you trying to get me shot?"
+          },
+          {
+            "id": "leg_recruit_3c",
+            "text": "Then here's {cost}. Give it to your mother, and forget my face.",
+            "tier": "bribe",
+            "reaction": "I really shouldn't. She does need it, though."
+          },
+          {
+            "id": "leg_recruit_3d",
+            "text": "If I were a rebel, would I be standing here chatting with a legionary?",
+            "tier": "good",
+            "reaction": "No. I suppose you wouldn't."
+          }
+        ]
+      }
+    ],
+    "closings": {
+      "success": "Go. Quickly, before somebody sees. And be careful out there.",
+      "failure": "No. No, I'm calling it in. I'm sorry. Control, this is post nine, I have a suspect!"
+    }
+  },
+  {
+    "id": "leg_bored",
+    "speaker": "legionary",
+    "personality": "Bored, quietly corrupt legionary who treats the occupation as a racket; wants gossip, a deal or cash, and has no patience for speeches.",
+    "openings": [
+      {
+        "when": { "minSuspicion": 50 },
+        "text": "Everyone's jumpy tonight. Sirens, radios, Federation officers shouting at us. And now you. Make it interesting."
+      },
+      {
+        "text": "Evening. Checkpoint's closed. Well, closed to most people. Depends how the conversation goes."
+      }
+    ],
+    "exchanges": [
+      {
+        "prompt": "Eight hours on this corner. Nothing to read, nothing to smoke, nobody worth talking to. Tell me something I don't know.",
+        "replies": [
+          {
+            "id": "leg_bored_1a",
+            "text": "Curfew's moving up again next month. Earlier every time.",
+            "tier": "good",
+            "reaction": "Old news. But fine, points for trying."
+          },
+          {
+            "id": "leg_bored_1b",
+            "text": "This isn't the time for gossip. People are disappearing.",
+            "tier": "bad",
+            "reaction": "People are always disappearing. Doesn't make my shift any shorter."
+          },
+          {
+            "id": "leg_bored_1c",
+            "text": "Lantern, six-two. Detached duty. Want to explain to my lieutenant why you held me up?",
+            "tier": "intel",
+            "requiresIntel": "patrolCodes",
+            "reaction": "Lantern six-two, look at you with the proper words. Fine, fine."
+          },
+          {
+            "id": "leg_bored_1d",
+            "text": "The prefect's aide leaves the Federation officers' club at dawn. Twice this week, same coat.",
+            "tier": "best",
+            "reaction": "Has he now. That's worth something in the barracks."
+          }
+        ]
+      },
+      {
+        "prompt": "You know what this job pays? The Empire paid in denarii. The Federation pays in vouchers for their own canteens. So what's in it for me?",
+        "replies": [
+          {
+            "id": "leg_bored_2a",
+            "text": "I'll tell your centurion you're shaking people down at checkpoints.",
+            "tier": "insult",
+            "reaction": "My centurion takes a cut. Try again."
+          },
+          {
+            "id": "leg_bored_2b",
+            "text": "Nothing. So why work hard for them? Wave me through and save yourself the paperwork.",
+            "tier": "best",
+            "reaction": "Now there's a philosophy I can respect."
+          },
+          {
+            "id": "leg_bored_2c",
+            "text": "{cost}. Real money, not vouchers.",
+            "tier": "bribe",
+            "reaction": "Now you're speaking my language."
+          },
+          {
+            "id": "leg_bored_2d",
+            "text": "The satisfaction of a job well done.",
+            "tier": "neutral",
+            "reaction": "Is that what they're calling it now."
+          }
+        ]
+      },
+      {
+        "prompt": "Here's the thing. The Federation pays a bonus for every curfew-breaker brought in. Why shouldn't I collect it on you?",
+        "replies": [
+          {
+            "id": "leg_bored_3a",
+            "text": "Because I'm worth more to you outside a cell. I hear things, and I come through here often.",
+            "tier": "best",
+            "reaction": "A regular. I like regulars."
+          },
+          {
+            "id": "leg_bored_3b",
+            "text": "Because these are our streets, not theirs. Remember whose side you're on.",
+            "tier": "bad",
+            "reaction": "My side's the one that pays. I've heard that speech before."
+          },
+          {
+            "id": "leg_bored_3c",
+            "text": "Because the bonus is paid in vouchers, and it takes three forms to claim.",
+            "tier": "good",
+            "reaction": "Four forms, actually. You're not wrong."
+          }
+        ]
+      }
+    ],
+    "closings": {
+      "success": "Off you go, then. Pleasure doing business.",
+      "failure": "No sale. Hey! Over here! I've got a curfew-breaker for the bonus!"
+    }
+  }
+]

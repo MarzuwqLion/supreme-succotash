@@ -1,0 +1,314 @@
+[
+  {
+    "id": "trp_sergeant",
+    "speaker": "trooper",
+    "personality": "Disciplined Federation sergeant; respects clear answers, owned mistakes and competence, and has no time for excuses or flattery.",
+    "openings": [
+      {
+        "when": { "minSuspicion": 50 },
+        "text": "Stop. Hands visible. The sector's on heightened alert, so we do this properly."
+      },
+      {
+        "text": "Stop there. Hands where I can see them. Name, purpose, destination. In that order."
+      }
+    ],
+    "exchanges": [
+      {
+        "prompt": "Name, purpose, destination. I won't ask twice.",
+        "replies": [
+          {
+            "id": "trp_sergeant_1a",
+            "text": "Sorry, I got turned around, the streets all look alike, my phone's dead, and...",
+            "tier": "bad",
+            "reaction": "That's three excuses and no answers."
+          },
+          {
+            "id": "trp_sergeant_1b",
+            "text": "Lantern, six-two. Detached duty, Directorate courier. You know the protocol.",
+            "tier": "intel",
+            "requiresIntel": "patrolCodes",
+            "reaction": "Lantern six-two, confirmed. You should have opened with that."
+          },
+          {
+            "id": "trp_sergeant_1c",
+            "text": "Russo, Marco. Night shift at the port. Home to Via Toledo.",
+            "tier": "best",
+            "reaction": "Clear and in order. Thank you."
+          },
+          {
+            "id": "trp_sergeant_1d",
+            "text": "I don't answer to Federation corporals.",
+            "tier": "insult",
+            "reaction": "Sergeant. And you answer to whoever's holding the rifle."
+          }
+        ]
+      },
+      {
+        "prompt": "Curfew started two hours ago. Explain why you're still on the street.",
+        "replies": [
+          {
+            "id": "trp_sergeant_2a",
+            "text": "Maybe {cost} explains it better than I can.",
+            "tier": "bribe",
+            "reaction": "I'll log that as an on-the-spot curfew fine, paid in full. Don't make me regret it."
+          },
+          {
+            "id": "trp_sergeant_2b",
+            "text": "Shift ran long. I can give you my foreman's name.",
+            "tier": "good",
+            "reaction": "Noted. Get a late pass next time."
+          },
+          {
+            "id": "trp_sergeant_2c",
+            "text": "I was only walking. Does it really matter?",
+            "tier": "bad",
+            "reaction": "It matters. That's what a curfew is."
+          },
+          {
+            "id": "trp_sergeant_2d",
+            "text": "No good reason. I lost track of time, I know it's a violation, and I'll take the citation.",
+            "tier": "best",
+            "reaction": "You own it, good. Most people lie to me."
+          }
+        ]
+      },
+      {
+        "prompt": "Last check. Your hands are steady and you're not sweating. Either you're honest or you're trained. Which?",
+        "replies": [
+          {
+            "id": "trp_sergeant_3a",
+            "text": "Honest. If I were trained, I'd have a better story than a missed curfew.",
+            "tier": "best",
+            "reaction": "That's logical. I'll accept it."
+          },
+          {
+            "id": "trp_sergeant_3b",
+            "text": "Trained? I'm flattered, Sergeant. You're very perceptive.",
+            "tier": "bad",
+            "reaction": "Flattery. That goes in the column against you."
+          },
+          {
+            "id": "trp_sergeant_3c",
+            "text": "Tired. Calm and tired look the same at this hour.",
+            "tier": "good",
+            "reaction": "They do. Fair enough."
+          }
+        ]
+      }
+    ],
+    "closings": {
+      "success": "Cleared. Move along, and don't let me find you out after curfew again.",
+      "failure": "No. Something about you is wrong. Checkpoint two, detaining one, requesting backup."
+    }
+  },
+  {
+    "id": "trp_conscript",
+    "speaker": "trooper",
+    "personality": "Homesick Federation conscript eleven months from his own Earth; lonely and unsure of the mission, he opens up to anyone who treats him like a person.",
+    "openings": [
+      {
+        "when": { "minSuspicion": 50 },
+        "text": "Hey, stop. Sorry. Everyone's on edge tonight, they've got us checking everyone. Just stand there, okay?"
+      },
+      {
+        "text": "Curfew check. Stay where you are. Sorry, I'm supposed to sound tougher than that."
+      }
+    ],
+    "exchanges": [
+      {
+        "prompt": "Eleven months here. Same sky, same sea, and nothing else is the same. You ever been somewhere that looked like home but wasn't?",
+        "replies": [
+          {
+            "id": "trp_conscript_1a",
+            "text": "Yes. It's the worst kind of homesick. Where's home for you?",
+            "tier": "best",
+            "reaction": "A town called Haverford. You don't have it here, I looked for it on your maps."
+          },
+          {
+            "id": "trp_conscript_1b",
+            "text": "You're a soldier. Homesickness is for civilians.",
+            "tier": "bad",
+            "reaction": "That's what my lieutenant says. Doesn't help."
+          },
+          {
+            "id": "trp_conscript_1c",
+            "text": "Lantern, six-two. Detached duty. Sorry, but I do need to get through.",
+            "tier": "intel",
+            "requiresIntel": "patrolCodes",
+            "reaction": "Lantern six-two, that's this week's. I still have to finish the check, though."
+          },
+          {
+            "id": "trp_conscript_1d",
+            "text": "I've never left Napoli.",
+            "tier": "neutral",
+            "reaction": "Lucky. Or maybe not, I don't know anymore."
+          }
+        ]
+      },
+      {
+        "prompt": "My lieutenant says we're here to bring order. To help. But nobody here looks helped. Do you think we're helping?",
+        "replies": [
+          {
+            "id": "trp_conscript_2a",
+            "text": "You're taking people off the streets. Is that what helping looks like where you're from?",
+            "tier": "insult",
+            "reaction": "I haven't taken anyone! I check papers, that's all I do."
+          },
+          {
+            "id": "trp_conscript_2b",
+            "text": "I think you're a long way from home, doing what you're told.",
+            "tier": "good",
+            "reaction": "Yeah. That's about it."
+          },
+          {
+            "id": "trp_conscript_2c",
+            "text": "I think you're asking the question, and that says something good about you.",
+            "tier": "best",
+            "reaction": "Thanks. Nobody here says anything like that to us."
+          },
+          {
+            "id": "trp_conscript_2d",
+            "text": "Of course. The Federation has been good for Napoli.",
+            "tier": "bad",
+            "reaction": "You don't have to say that. I know what it's like out here."
+          }
+        ]
+      },
+      {
+        "prompt": "I'm meant to log everyone I stop. If I log you, there'll be questions. If I don't and someone finds out, the questions are for me.",
+        "replies": [
+          {
+            "id": "trp_conscript_3a",
+            "text": "If you don't let me go, I'll make sure someone finds out.",
+            "tier": "bad",
+            "reaction": "Are you threatening me? I'm the one with the rifle."
+          },
+          {
+            "id": "trp_conscript_3b",
+            "text": "Do whatever keeps you safe. Someone's waiting for you back home. Get back to them.",
+            "tier": "best",
+            "reaction": "Yeah. Yeah, they are."
+          },
+          {
+            "id": "trp_conscript_3c",
+            "text": "Log me as a curfew warning. It's true, and it's boring.",
+            "tier": "good",
+            "reaction": "Boring is good. Boring doesn't get flagged."
+          },
+          {
+            "id": "trp_conscript_3d",
+            "text": "Here's {cost}. Send it home, or put it toward a ticket back there.",
+            "tier": "bribe",
+            "reaction": "I can't... Okay, but don't tell anyone."
+          }
+        ]
+      }
+    ],
+    "closings": {
+      "success": "Go on. Before I think about it too much.",
+      "failure": "I'm sorry. I can't risk it. Contact, checkpoint six! I need support here!"
+    }
+  },
+  {
+    "id": "trp_believer",
+    "speaker": "trooper",
+    "personality": "True believer in the Federation's mission to bring order to other Earths; wants to hear locals agree, despises Imperial nostalgia and rebel talk.",
+    "openings": [
+      {
+        "when": { "minSuspicion": 50 },
+        "text": "Halt. There are insurgents in this sector tonight. Loyal residents have nothing to fear from a few questions."
+      },
+      {
+        "text": "Halt. Curfew applies to everyone, citizen. Even those who think the Empire still runs this city."
+      }
+    ],
+    "exchanges": [
+      {
+        "prompt": "Your Empire ran this city on bread, games and bribes for two thousand years. We're the first to bring it real order. You understand that?",
+        "replies": [
+          {
+            "id": "trp_believer_1a",
+            "text": "The Empire kept Napoli fed for two thousand years. You've had eighteen months.",
+            "tier": "bad",
+            "reaction": "Fed and rotting. You're proving my point."
+          },
+          {
+            "id": "trp_believer_1b",
+            "text": "I saw what the prefects took from us. The Federation at least has rules, and keeps them.",
+            "tier": "best",
+            "reaction": "Exactly, rules. Finally, somebody here understands."
+          },
+          {
+            "id": "trp_believer_1c",
+            "text": "I understand the trams run on time now.",
+            "tier": "good",
+            "reaction": "Small things first. The big ones follow."
+          }
+        ]
+      },
+      {
+        "prompt": "People say we take people. We relocate them: labor, resettlement, medical programs. The rebels call it kidnapping. What do you call it?",
+        "replies": [
+          {
+            "id": "trp_believer_2a",
+            "text": "Necessary. Somebody has to make the hard decisions. The Empire never did.",
+            "tier": "best",
+            "reaction": "Necessary. You'd be surprised how few locals can say that word."
+          },
+          {
+            "id": "trp_believer_2b",
+            "text": "Kidnapping. Same as everyone who's watched the trucks go by.",
+            "tier": "insult",
+            "reaction": "Then you've been listening to rebels. That's a mistake."
+          },
+          {
+            "id": "trp_believer_2c",
+            "text": "I call it Directorate business. Lantern, six-two, detached duty. Check it.",
+            "tier": "intel",
+            "requiresIntel": "patrolCodes",
+            "reaction": "Lantern six-two, so you're one of ours? Then you should know better than to walk around alone."
+          },
+          {
+            "id": "trp_believer_2d",
+            "text": "I don't call it anything. I keep my head down.",
+            "tier": "neutral",
+            "reaction": "Heads down is how the Empire lasted so long. We want heads up."
+          }
+        ]
+      },
+      {
+        "prompt": "Last question. If I asked you to report a neighbor who talked like a rebel, would you do it?",
+        "replies": [
+          {
+            "id": "trp_believer_3a",
+            "text": "If I had proof. I wouldn't waste your time with rumors.",
+            "tier": "good",
+            "reaction": "Proof is reasonable. We like reasonable."
+          },
+          {
+            "id": "trp_believer_3b",
+            "text": "Report my neighbors? I'm not an informer.",
+            "tier": "bad",
+            "reaction": "Then you're part of the problem."
+          },
+          {
+            "id": "trp_believer_3c",
+            "text": "I don't really know my neighbors.",
+            "tier": "neutral",
+            "reaction": "You should. That's how communities stay safe."
+          },
+          {
+            "id": "trp_believer_3d",
+            "text": "I'd want to do it properly. Who should I ask for at the Castel?",
+            "tier": "best",
+            "reaction": "The intake office. Tell them Corporal Weller sent you."
+          }
+        ]
+      }
+    ],
+    "closings": {
+      "success": "Good. Carry on, citizen. The Federation needs more people like you.",
+      "failure": "I don't believe a word of it. Checkpoint three, suspected insurgent. Send a team."
+    }
+  }
+]
