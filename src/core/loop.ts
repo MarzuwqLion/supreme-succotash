@@ -14,6 +14,7 @@ export class FixedLoop {
   private last = 0;
   private running = false;
   private rafId = 0;
+  private reported = false;
 
   constructor(
     private readonly cb: LoopCallbacks,
@@ -27,19 +28,28 @@ export class FixedLoop {
     this.last = performance.now();
     const frame = (now: number) => {
       if (!this.running) return;
+      // Always schedule the next frame first so one bad frame can't stop the game.
+      this.rafId = requestAnimationFrame(frame);
       const dtMs = Math.min(250, now - this.last);
       this.last = now;
       const stepMs = 1000 / this.hz();
       this.acc += dtMs;
       let steps = 0;
-      while (this.acc >= stepMs && steps < this.maxSteps()) {
-        this.cb.step();
-        this.acc -= stepMs;
-        steps++;
+      try {
+        while (this.acc >= stepMs && steps < this.maxSteps()) {
+          this.cb.step();
+          this.acc -= stepMs;
+          steps++;
+        }
+        if (steps >= this.maxSteps()) this.acc = 0; // drop time instead of spiralling
+        this.cb.render(this.acc / stepMs, dtMs / 1000);
+      } catch (err) {
+        this.acc = 0;
+        if (!this.reported) {
+          this.reported = true;
+          console.error(err);
+        }
       }
-      if (steps >= this.maxSteps()) this.acc = 0; // drop time instead of spiralling
-      this.cb.render(this.acc / stepMs, dtMs / 1000);
-      this.rafId = requestAnimationFrame(frame);
     };
     this.rafId = requestAnimationFrame(frame);
   }

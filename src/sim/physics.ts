@@ -19,6 +19,8 @@ export function initPhysics(): Promise<Rapier> {
 const G_WORLD = 0x0001;
 const G_CHAR = 0x0002;
 const G_GROUND = 0x0004;
+/** Characters others can walk through (stood-down hostiles stepping aside); still hit by shots. */
+const G_GHOST = 0x0008;
 const groups = (membership: number, filter: number) => ((membership & 0xffff) << 16) | (filter & 0xffff);
 
 export interface CharBody {
@@ -72,6 +74,11 @@ export class Physics {
     return cb;
   }
 
+  /** Let other characters walk through this one (shots still hit it). */
+  setPassThrough(cb: CharBody, on: boolean): void {
+    cb.collider.setCollisionGroups(groups(on ? G_GHOST : G_CHAR, 0xffff));
+  }
+
   removeCharacter(cb: CharBody): void {
     this.entityByCollider.delete(cb.collider.handle);
     this.bodies.delete(cb.entityId);
@@ -110,7 +117,7 @@ export class Physics {
   /** Cast a ray. `mask` 'world' ignores characters (sight lines); 'all' hits characters too. */
   raycast(origin: V3, dir: V3, maxDist: number, mask: 'world' | 'all', exclude?: CharBody): RayHit | null {
     const ray = new this.R.Ray(origin, dir);
-    const filter = mask === 'world' ? G_WORLD | G_GROUND : G_WORLD | G_GROUND | G_CHAR;
+    const filter = mask === 'world' ? G_WORLD | G_GROUND : G_WORLD | G_GROUND | G_CHAR | G_GHOST;
     const hit = this.world.castRay(ray, maxDist, true, undefined, groups(0xffff, filter), exclude?.collider, exclude?.body);
     if (!hit) return null;
     const d = hit.timeOfImpact;

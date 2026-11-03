@@ -360,7 +360,10 @@ export class Game {
     }
     if (this.endTimer >= 0) {
       // Let the final moment breathe before the end screen.
-      if (--this.endTimer <= 0 && this.endOutcome) this.endRun(this.endOutcome);
+      if (--this.endTimer <= 0 && this.endOutcome) {
+        this.endRun(this.endOutcome);
+        return;
+      }
       w.tick(emptyInput(f));
       this.handleEvents(w.drainEvents());
       return;

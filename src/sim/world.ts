@@ -64,9 +64,9 @@ export interface WorldStats {
   executions: number;
 }
 
-let nextId = 1;
-
 export class SimWorld {
+  /** Per-world id counter so a seed replays identically no matter what ran before. */
+  private nextId = 1;
   readonly physics: Physics;
   readonly nav: Nav;
   readonly rng: Rng;
@@ -99,7 +99,7 @@ export class SimWorld {
     this.rng = new Rng(hashSeed(ctx.runSeed, ctx.areaIndex, 'sim'));
     this.suspicion = new SuspicionMeter(ctx.coverIdentity);
     const p = tuning.player;
-    const pid = nextId++;
+    const pid = this.nextId++;
     const body = this.physics.addCharacter(pid, ctx.layout.entrance, p.capsuleRadius, p.capsuleHalfHeight);
     const c = ctx.carry;
     this.player = {
@@ -161,7 +161,7 @@ export class SimWorld {
   }
 
   private spawnHostile(kind: HostileKind, pos: V3, yaw: number, route: V3[]): Hostile {
-    const id = nextId++;
+    const id = this.nextId++;
     const ht = tuning.hostiles;
     const health = kind === 'legionary' ? ht.legionary.health : kind === 'trooper' ? ht.trooper.health : kind === 'escort' ? ht.escort.health : ht.hale.health;
     const speed = kind === 'legionary' ? ht.legionary.speed : kind === 'hale' ? ht.hale.speed : ht.trooper.speed;
@@ -304,6 +304,7 @@ export class SimWorld {
     if (h.state === 'dead' || h.state === 'conversation') return;
     if (h.state === 'stoodDown' && !opts.force) return;
     const was = h.state;
+    if (was === 'stoodDown' && h.body) this.physics.setPassThrough(h.body, false);
     h.state = 'alert';
     h.detection = 1;
     h.unseenSec = 0;
@@ -624,6 +625,8 @@ export class SimWorld {
       h.talkedDown = true;
       h.detection = 0;
       h.waitFrames = 90;
+      // They step aside: don't let a crowd of stood-down hostiles wall the agent in.
+      if (h.body) this.physics.setPassThrough(h.body, true);
     } else {
       h.state = 'patrol'; // so alert() treats it as a fresh escalation
       this.alert(h, this.player.pos, { force: true });

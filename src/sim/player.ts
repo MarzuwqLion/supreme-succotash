@@ -268,7 +268,8 @@ function gunNoise(w: SimWorld, loud: boolean): void {
     w.applySuspicion(w.suspicion.loudGunfire(w.timeSec));
     w.loudNoise(p.pos);
   } else {
-    const seen = w.witnesses().filter((h) => h.state !== 'stoodDown');
+    // A silenced shot gives the agent away only to hostiles who weren't already fighting.
+    const seen = w.witnesses().filter((h) => h.state !== 'stoodDown' && h.state !== 'alert');
     w.applySuspicion(w.suspicion.silencedShot(seen.length > 0));
     for (const h of seen) w.alert(h, p.pos, { propagate: false });
   }

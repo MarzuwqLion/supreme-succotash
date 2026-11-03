@@ -24,7 +24,7 @@ function face(h: Hostile, target: V3, degPerSec = 540): void {
 }
 
 /** Is a capsule-wide straight walk from a to b free of walls? */
-function walkable(w: SimWorld, a: V3, b: V3): boolean {
+export function walkable(w: SimWorld, a: V3, b: V3): boolean {
   const d = distXZ(a, b);
   if (d < 0.05) return true;
   const nx = (b.x - a.x) / d;
@@ -59,11 +59,41 @@ function moveTo(w: SimWorld, h: Hostile, target: V3, speed: number, arriveDist =
     wp = h.path[0];
   }
   if (!wp) return true;
-  const dir = normalizeXZ(sub(wp, h.pos));
+  let dir = normalizeXZ(sub(wp, h.pos));
+  dir = avoidCharacters(w, h, dir);
   const step = Math.min(speed * DT(), distXZ(h.pos, wp));
   w.physics.move(h.body, dir.x * step, dir.z * step);
   h.yaw = turnToward(h.yaw, Math.atan2(dir.x, dir.z), deg(420) * DT());
   return false;
+}
+
+/**
+ * Steer around other characters ahead. Everyone keeps to their right, so two
+ * people meeting head-on in an alley pass instead of pushing forever.
+ */
+export function avoidCharacters(w: SimWorld, self: { id: number; pos: V3 }, dir: V3): V3 {
+  const range = tuning.hostiles.avoidRange;
+  let ax = 0;
+  let az = 0;
+  const consider = (id: number, pos: V3) => {
+    if (id === self.id) return;
+    const dx = pos.x - self.pos.x;
+    const dz = pos.z - self.pos.z;
+    const d = Math.hypot(dx, dz);
+    if (d > range || d < 1e-4) return;
+    const ahead = (dx * dir.x + dz * dir.z) / d;
+    if (ahead < 0.2) return;
+    const k = ahead * (1 - d / range);
+    // Push away and to our right.
+    const rx = -dir.z;
+    const rz = dir.x;
+    ax += (-dx / d) * k * 0.6 + rx * k;
+    az += (-dz / d) * k * 0.6 + rz * k;
+  };
+  for (const o of w.hostiles) if (o.state !== 'dead' && o.body) consider(o.id, o.pos);
+  if (!w.player.dead) consider(w.player.id, w.player.pos);
+  if (ax === 0 && az === 0) return dir;
+  return normalizeXZ(v3(dir.x + ax, 0, dir.z + az));
 }
 
 function lookAround(h: Hostile, w: SimWorld, amplitudeDeg = 55, periodSec = 3.5): void {
@@ -105,14 +135,18 @@ function followRoute(w: SimWorld, h: Hostile, speed: number): void {
     if (moveTo(w, h, home, speed, 0.6)) lookAround(h, w);
     return;
   }
+  const inspecting = h.kind === 'hale';
   if (h.waitFrames > 0) {
     h.waitFrames--;
-    lookAround(h, w, 70, 4);
+    // Hale stops to inspect: he keeps his eyes on the work, with only a narrow glance.
+    if (inspecting) lookAround(h, w, tuning.hostiles.haleInspectLookDeg, 5);
+    else lookAround(h, w, 70, 4);
     return;
   }
   const target = h.route[h.routeIndex]!;
   if (moveTo(w, h, target, speed, 0.5)) {
-    h.waitFrames = w.rng.int(60, 160);
+    const hw = tuning.hostiles;
+    h.waitFrames = inspecting ? w.rng.int(Math.round(hw.haleInspectMinSec * 60), Math.round(hw.haleInspectMaxSec * 60)) : w.rng.int(60, 160);
     h.lookBase = h.yaw;
     let next = h.routeIndex + h.routeDir;
     if (next < 0 || next >= h.route.length) {
