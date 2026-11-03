@@ -14,13 +14,22 @@ export type CameraMode = 'explore' | 'melee' | 'aim' | 'conversation';
 class Spring {
   v = 0;
   constructor(public x: number) {}
+  /**
+   * Spring-damper toward `target`. Integrated in small fixed substeps so it
+   * stays stable at any frame rate (a single 1/30 s step at 5 Hz diverges).
+   */
   step(target: number, dt: number): number {
     const f = tuning.camera.springFrequency * Math.PI * 2;
     const z = tuning.camera.springDamping;
-    // Semi-implicit critically-damped spring.
-    const a = f * f * (target - this.x) - 2 * z * f * this.v;
-    this.v += a * dt;
-    this.x += this.v * dt;
+    const sub = 1 / 240;
+    let left = dt;
+    while (left > 1e-6) {
+      const h = Math.min(sub, left);
+      const a = f * f * (target - this.x) - 2 * z * f * this.v;
+      this.v += a * h;
+      this.x += this.v * h;
+      left -= h;
+    }
     return this.x;
   }
 }
@@ -76,7 +85,7 @@ export class FollowCamera {
   update(dt: number, focus: V3, yaw: number, pitch: number, mode: CameraMode): void {
     this.mode = mode;
     const m = tuning.camera[mode];
-    const step = Math.min(dt, 1 / 30);
+    const step = Math.min(dt, 0.1);
     const dist = this.dist.step(m.distance, step);
     const height = this.height.step(m.height, step);
     const side = this.side.step(m.side, step);

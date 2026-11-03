@@ -286,4 +286,55 @@ describe('simulation (Rapier, headless)', () => {
     run(w, 120);
     expect(w.hostiles[0]!.state).toBe('patrol');
   });
+
+  it('point-blank shot: RT during a strike fires once at the melee target after a 4-frame snap', async () => {
+    const w = await makeWorld(openLayout([{ kind: 'escort', pos: v3(6, 0, 7.6), yaw: Math.PI }]));
+    const h = w.hostiles[0]!;
+    h.health = h.maxHealth = 1000;
+    w.tick(press('light'));
+    w.tick(press('fire'));
+    const mag = w.player.weapons[0]!.mag;
+    run(w, tuning.melee.pointBlankSnapFrames - 1);
+    expect(w.player.weapons[0]!.mag).toBe(mag);
+    run(w, 2);
+    expect(w.player.weapons[0]!.mag).toBe(mag - 1);
+    // A second RT in the same strike does nothing.
+    w.tick(press('fire'));
+    run(w, 6);
+    expect(w.player.weapons[0]!.mag).toBe(mag - 1);
+    run(w, 20);
+    expect(h.maxHealth - h.health).toBe(tuning.melee.lightDamage[0]! + tuning.weapons.pistol.damage);
+  });
+
+  it('items: medkit heals 50, jammer removes 25 once per area, smoke spawns a cloud', async () => {
+    const w = await makeWorld(openLayout([]), {});
+    const p = w.player;
+    p.items.medkit = 1;
+    p.items.smoke = 1;
+    p.hasJammer = true;
+    p.health = 30;
+    p.selectedItem = 0;
+    w.tick(press('useItem'));
+    w.tick(frame((f) => (f.released.useItem = true)));
+    expect(p.health).toBe(80);
+    w.applySuspicion(w.suspicion.set(60));
+    // Medkits are gone, so the selection falls through to smoke, then jammer.
+    w.tick(press('useItem'));
+    w.tick(frame((f) => (f.released.useItem = true)));
+    expect(w.smokes.length).toBe(1);
+    w.tick(press('useItem'));
+    w.tick(frame((f) => (f.released.useItem = true)));
+    expect(w.suspicion.value).toBe(35);
+    expect(w.suspicion.jammerAvailable).toBe(false);
+  });
+
+  it('swapping weapons and manual reload', async () => {
+    const w = await makeWorld(openLayout([]), {});
+    w.player.weapons.push({ id: 'revolver', mag: 2, reserve: 12 });
+    w.tick(press('swap2'));
+    expect(w.player.slot).toBe(1);
+    w.tick(press('reload'));
+    run(w, tuning.weapons.revolver.reload + 1);
+    expect(w.player.weapons[1]).toMatchObject({ mag: 6, reserve: 8 });
+  });
 });

@@ -6,7 +6,7 @@ import { Rng, hashSeed, randomSeed } from '../core/rng';
 import { forwardFromYaw, v3 } from '../core/vec';
 import { tuning } from '../data/tuning';
 import { InputSystem, type InputFrame } from '../input/input';
-import { beginRun, buy, earnCash, endRun as finishRun, sanitizeLoadout, spendCash, type ShopItemId } from '../meta/economy';
+import { beginRun, buy, earnCash, endRun as finishRun, sanitizeLoadout, shopItem, spendCash, type ShopItemId } from '../meta/economy';
 import { haleExtraEscorts, haleOnDefeat, haleOnEncounter, haleOnExtraction, recordMeeting } from '../meta/memory';
 import { browserStorage, SaveStore, type Loadout, type OwnedGearId, type RunRecord } from '../meta/save';
 import type { CameraMode } from '../render/camera';
@@ -129,7 +129,8 @@ export class Game {
       if (active.haleInvolved) haleOnExtraction(d.hale);
       locked = finishRun(d, record).lockedNow;
     });
-    this.fobNotice = `Your last run was interrupted, so it counts as an extraction.${locked.length ? ` Locked for this run: ${locked.join(', ')}.` : ''}`;
+    const names = locked.map((g) => shopItem(g).name);
+    this.fobNotice = `Your last run was interrupted, so it counts as an extraction.${names.length ? ` Locked for this run: ${names.join(', ')}.` : ''}`;
   }
 
   // ------------------------------------------------------------ overlays
@@ -567,7 +568,6 @@ export class Game {
     this.info.trustNow = '-';
     this.mode = 'playing';
     this.setOverlay(null);
-    if (this.lastDevice === 'kbm') this.input.requestPointerLock();
 
     if (target.speaker === 'hostile') {
       if (helped) {
@@ -598,6 +598,8 @@ export class Game {
     }
     this.handleEvents(w.drainEvents());
     this.flushPending();
+    // Only grab the mouse again if nothing else (shop, intel) took over the screen.
+    if (this.mode === 'playing' && this.lastDevice === 'kbm') this.input.requestPointerLock();
   }
 
   /** A talked-down hostile may reveal the exit, reveal a cache, or hand over intel. */

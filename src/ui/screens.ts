@@ -38,7 +38,7 @@ export function controlsTable(): HTMLElement {
 }
 
 const GEAR_NAMES: Record<OwnedGearId, string> = { revolver: 'Heavy revolver', smg: 'Compact SMG', plateCarrier: 'Plate carrier', jammer: 'Signal jammer' };
-const RESULT_TEXT: Record<string, string> = { none: 'never met', success: 'went well', failure: 'went badly', rebuff: 'not yet won over', bribed: 'paid off' };
+const RESULT_TEXT: Record<string, string> = { none: '', success: 'went well', failure: 'went badly', rebuff: 'ended with them not yet won over', bribed: 'ended with a bribe' };
 
 export interface FobCallbacks {
   buy(id: ShopItemId): void;
@@ -135,8 +135,8 @@ export function fobScreen(save: SaveData, loadout: Loadout, notice: string | nul
         'section',
         {},
         h('h2', {}, 'Dossier'),
-        h('p', {}, h('b', {}, 'Lucca'), ` (gunsmith): met ${lucca.meetings} time${lucca.meetings === 1 ? '' : 's'}, last meeting ${RESULT_TEXT[lucca.lastResult]}.`),
-        h('p', {}, h('b', {}, 'Lucretia'), ` (informant): met ${lucretia.meetings} time${lucretia.meetings === 1 ? '' : 's'}, last meeting ${RESULT_TEXT[lucretia.lastResult]}.`),
+        h('p', {}, h('b', {}, 'Lucca'), ` (gunsmith): ${memoryLine(lucca)}`),
+        h('p', {}, h('b', {}, 'Lucretia'), ` (informant): ${memoryLine(lucretia)}`),
         h('p', {}, h('b', {}, 'Commander Hale'), `: ${save.hale.grudge > 0 ? `holds a grudge (+${save.hale.grudge} escort${save.hale.grudge > 1 ? 's' : ''})` : 'no grudge'} · beaten ${save.hale.defeats} time${save.hale.defeats === 1 ? '' : 's'}.`),
         h('h3', {}, 'Gear status'),
         h('div', { class: 'desc' }, ...(['revolver', 'smg', 'plateCarrier', 'jammer'] as OwnedGearId[]).map((g) => h('div', {}, `${GEAR_NAMES[g]}: ${!save.owned[g] ? 'not owned' : isLocked(save, g) ? 'LOCKED this run' : 'available'}`))),
@@ -150,6 +150,11 @@ export function fobScreen(save: SaveData, loadout: Loadout, notice: string | nul
       ),
     ),
   );
+}
+
+function memoryLine(m: SaveData['cast']['lucca']): string {
+  if (m.meetings === 0) return 'not met yet.';
+  return `met ${m.meetings} time${m.meetings === 1 ? '' : 's'}; the last meeting ${RESULT_TEXT[m.lastResult]}.`;
 }
 
 function hashText(s: string): number {
@@ -203,7 +208,21 @@ export function conversationScreen(c: ConversationController, cash: number, devi
       );
     });
   } else {
-    const label = c.outcome === 'success' || c.outcome === 'bribed' ? 'They stand down.' : c.outcome === 'rebuff' ? 'Not yet. They remember this, though.' : 'It went badly.';
+    const who = c.ctx.speaker;
+    const label =
+      c.outcome === 'failure'
+        ? who === 'lucca' || who === 'lucretia'
+          ? `${c.speakerName} has heard enough. Word gets around (+suspicion).`
+          : 'It went badly. They raise the alarm.'
+        : c.outcome === 'rebuff'
+          ? `${c.speakerName} isn't won over yet, but will remember this.`
+          : who === 'lucca'
+            ? 'Lucca will trade with you.'
+            : who === 'lucretia'
+              ? c.outcome === 'bribed'
+                ? 'Lucretia takes the money and helps, this once.'
+                : 'Lucretia will help.'
+              : 'They stand down.';
     replies.append(h('div', { class: `result ${c.outcome}` }, label), h('button', { class: 'primary', onclick: onDone }, 'Continue'));
   }
   const exch = c.exchange ? `Exchange ${c.exchange.index + 1} of ${c.state.totalExchanges}` : 'Conversation over';
