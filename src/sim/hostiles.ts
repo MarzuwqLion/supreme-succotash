@@ -23,6 +23,21 @@ function face(h: Hostile, target: V3, degPerSec = 540): void {
   h.yaw = turnToward(h.yaw, yawTo(h.pos, target), deg(degPerSec) * DT());
 }
 
+/** Is a capsule-wide straight walk from a to b free of walls? */
+function walkable(w: SimWorld, a: V3, b: V3): boolean {
+  const d = distXZ(a, b);
+  if (d < 0.05) return true;
+  const nx = (b.x - a.x) / d;
+  const nz = (b.z - a.z) / d;
+  const off = tuning.hostiles.capsuleRadius;
+  for (const s of [-off, 0, off]) {
+    const ox = -nz * s;
+    const oz = nx * s;
+    if (!w.physics.clearLine(v3(a.x + ox, 0.9, a.z + oz), v3(b.x + ox, 0.9, b.z + oz))) return false;
+  }
+  return true;
+}
+
 /** Walk toward `target` using the cell graph. Returns true when arrived. */
 function moveTo(w: SimWorld, h: Hostile, target: V3, speed: number, arriveDist = 0.5): boolean {
   if (!h.body) return true;
@@ -33,6 +48,8 @@ function moveTo(w: SimWorld, h: Hostile, target: V3, speed: number, arriveDist =
   h.pathAge++;
   if (!h.path.length || !h.pathTarget || distXZ(h.pathTarget, target) > 2 || h.pathAge > 90) {
     h.path = w.nav.waypoints(h.pos, target);
+    // String-pull: skip waypoints we can walk past in a straight line.
+    while (h.path.length >= 2 && walkable(w, h.pos, h.path[1]!)) h.path.shift();
     h.pathTarget = clone(target);
     h.pathAge = 0;
   }
