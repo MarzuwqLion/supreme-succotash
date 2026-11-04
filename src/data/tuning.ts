@@ -35,6 +35,8 @@ export const tuning = {
     pitchMinDeg: -55,
     pitchMaxDeg: 40,
     interactRange: 2.6,
+    coverMoveSpeed: 2.4,
+    coverLean: 0.8,
   },
 
   melee: {
@@ -99,6 +101,8 @@ export const tuning = {
     melee: { distance: 6.5, height: 2.6, side: 0.3, fov: 65 }, // doc
     aim: { distance: 1.8, height: 1.6, side: 0.8, fov: 45 }, // doc
     conversation: { distance: 2.2, height: 1.4, side: 0.8, fov: 50 }, // doc
+    shoulder: { distance: 2.5, height: 1.65, side: 0.75, fov: 55 },
+    shoulderAim: { distance: 1.35, height: 1.6, side: 0.8, fov: 40 },
     springFrequency: 5.0,
     springDamping: 1.0,
     meleeModeRange: 7,
@@ -220,7 +224,7 @@ export const tuning = {
 
   gen: {
     gridSize: 6, // doc
-    blockSize: 12, // doc
+    blockSize: 24, // doc says 12 m; doubled so areas read as an expansive city (see DECISIONS.md)
     minEntranceExitDistance: 50, // doc
     hostilesMinArea12: 8, // doc
     hostilesMaxArea12: 12, // doc
@@ -231,12 +235,40 @@ export const tuning = {
     castAppearChance: 0.5, // doc
     baseEscorts: 2, // doc
     maxGrudgeEscorts: 2, // doc
-    buildingHeightMin: 7,
-    buildingHeightMax: 15,
-    alleyWidth: 4,
-    streetWidth: 8,
-    wallHeight: 6,
-    exitBeaconRange: 30,
+    buildingHeightMin: 16,
+    buildingHeightMax: 30,
+    towerHeightMin: 42,
+    towerHeightMax: 72,
+    alleyWidth: 10,
+    canalWidth: 7,
+    deckHeight: 5,
+    deckDepth: 4,
+    stairAngleDeg: 30,
+    wallHeight: 7,
+    castelWallHeight: 12,
+    perimeterDepth: 10,
+    deckChance: { porto: 0.3, spaccanapoli: 0.55, quartieri: 0.3, castel: 0.65 },
+    bridgeChance: 0.7,
+    canalBridgeChance: 0.5,
+    fountainChance: 0.7,
+    sentryShare: 0.25,
+    exitBeaconRange: 45,
+  },
+
+  civilians: {
+    porto: 28,
+    spaccanapoli: 34,
+    quartieri: 24,
+    castel: 8,
+    walkSpeed: 1.3,
+    fleeSpeed: 5.2,
+    fleeRange: 30,
+    alertFleeRange: 16,
+    cowerMinSec: 12,
+    cowerMaxSec: 22,
+    talkRange: 2.4,
+    idleShare: 0.35,
+    drawRange: 70,
   },
 
   run: {

@@ -9,7 +9,7 @@ import type { Box } from '../sim/gen/layout';
  * and never feeds back into the simulation.
  */
 
-export type CameraMode = 'explore' | 'melee' | 'aim' | 'conversation';
+export type CameraMode = 'explore' | 'melee' | 'aim' | 'conversation' | 'shoulder' | 'shoulderAim';
 
 class Spring {
   v = 0;
@@ -82,13 +82,14 @@ export class FollowCamera {
     this.pz.x = at.z;
   }
 
-  update(dt: number, focus: V3, yaw: number, pitch: number, mode: CameraMode): void {
+  /** `sideSign` flips the shoulder offset (shoulder camera on the left). */
+  update(dt: number, focus: V3, yaw: number, pitch: number, mode: CameraMode, sideSign = 1): void {
     this.mode = mode;
     const m = tuning.camera[mode];
     const step = Math.min(dt, 0.1);
     const dist = this.dist.step(m.distance, step);
     const height = this.height.step(m.height, step);
-    const side = this.side.step(m.side, step);
+    const side = this.side.step(m.side * sideSign, step);
     const fov = this.fov.step(m.fov, step);
     const fx = this.px.step(focus.x, step);
     const fy = this.py.step(focus.y, step);

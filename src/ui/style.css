@@ -61,6 +61,11 @@ blockquote { border-left: 3px solid var(--gold); margin: 12px 0; padding: 4px 12
 .screen.end.extract h1 { color: var(--warn); }
 
 .screen.conv, .screen.shop, .screen.modal { display: flex; align-items: flex-end; justify-content: center; background: linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.05) 60%); padding-bottom: 32px; }
+/* Live panels: the world keeps running behind them, so keep the view clear. */
+.screen.live { background: linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0) 38%); pointer-events: none; padding-bottom: 18px; }
+.screen.live .conv-panel { pointer-events: auto; width: min(720px, 94vw); max-height: 46vh; background: rgba(18, 23, 30, 0.86); }
+.screen.live .conv-log { max-height: 20vh; }
+.conv-hint { color: var(--dim); font-size: 12px; text-align: right; }
 .screen.modal { align-items: center; background: rgba(0, 0, 0, 0.6); }
 .conv-panel { width: min(860px, 96vw); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; max-height: 80vh; display: flex; flex-direction: column; gap: 10px; overflow: auto; }
 .conv-panel.doc p { line-height: 1.5; }
@@ -111,6 +116,12 @@ blockquote { border-left: 3px solid var(--gold); margin: 12px 0; padding: 4px 12
 .prompt.context.execution { color: #ff9f1c; }
 .crosshair { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid rgba(255,255,255,0.85); border-radius: 50%; display: none; }
 .crosshair.on { display: block; }
+.crosshair.dot { display: block; width: 4px; height: 4px; margin: -2px 0 0 -2px; border: none; background: rgba(255,255,255,0.9); }
+.hud-card { position: absolute; left: 18px; top: 150px; width: 320px; background: rgba(12, 18, 26, 0.82); border: 1px solid rgba(76, 201, 240, 0.45); border-radius: 8px; padding: 10px 12px; opacity: 0; transform: translateX(-12px); transition: opacity 0.3s, transform 0.3s; }
+.hud-card.on { opacity: 1; transform: none; }
+.hud-card .kicker { color: #4cc9f0; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+.hud-card p { margin: 6px 0 0; font-size: 13px; line-height: 1.45; color: #dfe7ee; }
+.cover-state { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); font-size: 12px; color: #cfe8e4; }
 .log { position: absolute; right: 18px; top: 16px; width: 340px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
 .msg { background: rgba(0,0,0,0.5); padding: 3px 8px; border-radius: 4px; transition: opacity 0.5s; font-size: 13px; }
 .msg.fade { opacity: 0; }

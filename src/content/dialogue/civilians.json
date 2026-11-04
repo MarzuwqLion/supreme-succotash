@@ -1,0 +1,156 @@
+{
+  "areas": {
+    "porto": {
+      "idle": [
+        "Half the crates on these quays are Federation. Nobody asks what's in them. Nobody wants to be the one who asks.",
+        "They fenced off Pier 9 in the spring. The trucks go in full and come out hosed down. Nobody fishes near it now.",
+        "Ships from across the Empire used to tie up here. Alexandria, Carthage, Londinium. Now it's Federation freighters or nothing.",
+        "Three troopers searched my nets for an hour yesterday. They found fish. They seemed disappointed.",
+        "The Federation pays dockers in vouchers. You can't buy fish with vouchers. I've tried.",
+        "You're not a docker. Dockers watch the cargo, not the guards. Keep walking and nobody will ask.",
+        "The canals still run clean down to the sea. About the only thing in the Porto they haven't put a number on.",
+        "Curfew horn goes at nine now. The night boats used to come in by lantern. Now they come in early or not at all.",
+        "Mind the legionary by the bollards. He's had a bad week, and he's looking for someone to share it with.",
+        "Lucretia counts the trucks off the dock road. Everyone knows it. Nobody knows who she sells the count to.",
+        "We had a harbormaster who knew every boat by the sound of its bell. They resettled him. The new one reads off a screen.",
+        "The sea doesn't care who runs Napoli. Some days that's a comfort."
+      ],
+      "nervous": [
+        "They've closed the quays. Every crate, every boat, every pocket. Please, go and stand somewhere else.",
+        "They're turning the warehouses inside out. Whatever they're looking for, I don't want to be standing next to it.",
+        "Sirens all along the harbor. Anyone caught talking to you goes on the next truck. Walk away.",
+        "They're pulling people off the boats and checking hands for calluses. Yours wouldn't pass. Go.",
+        "The legionaries' radios keep saying stranger. You're a stranger. Please, not near my boat.",
+        "Every uniform on the dock road is jumpy. Somebody's going to get shot on these quays.",
+        "My boat's been searched twice already. I can't afford a third, and I can't afford you."
+      ],
+      "rumors": [
+        "Dockers lifted a crate off a Federation truck last month and hid it by the water near here. Nobody's dared go back for it.",
+        "My uncle hid his savings from the customs men among the cargo on this quay. He never said where. He didn't get the chance.",
+        "A fisherman kept a stash by the canal steps round here. The trucks got him first. Better you find it than them.",
+        "Smugglers still use the old hiding places in the Porto. Under a loose stone, behind a stack. Look where nobody looks.",
+        "A legionary skimmed cargo for a year and stashed it round these warehouses. They moved him to the Castel before he could sell it.",
+        "I heard there's a bag of Imperial coin tucked under one of the quays nearby. Not my business. Could be yours."
+      ]
+    },
+    "spaccanapoli": {
+      "idle": [
+        "They call it Spaccanapoli because it splits the city in half. Now it's split again, into checkpoints every two hundred paces.",
+        "Two thousand years without a single car on this street. Then the Federation brought its trucks, and now the marble's cracking.",
+        "The Valerii have kept a house on this street for nine hundred years. A Federation major lives in it now. They have the attic.",
+        "Federation inspectors take samples of my stock every Thursday. In eighteen months they've never once sent back a result.",
+        "Walk the upper promenade if you want to see the city. Walk the lower one if you'd rather the city didn't see you.",
+        "The roses along the Via were planted for the Emperor's visit when I was small. Someone still waters them. Not the Federation.",
+        "Every shutter on this street used to be open by eight. Now some never open at all. Taken, or hiding. You don't knock to ask.",
+        "My mother wears crimson to market, and every day a trooper asks what it means. It means she likes crimson.",
+        "The prefect used to walk the Via on festival days and shake hands. Now he rides past in a Federation car and doesn't look out.",
+        "Forty years on this street, and now I need a pass to visit my sister across the Via.",
+        "The old families still dress for dinner. Cream and black, every night, curfew or not. It's how they say no.",
+        "Commander Hale's name is on every notice on the Via. Nobody I know has ever seen his face. Nobody wants to."
+      ],
+      "nervous": [
+        "They've shut both ends of the Via. Nobody in, nobody out. Don't stand next to me.",
+        "Troopers on the promenades, legionaries in the shops. They're searching everyone. I can't be seen with you.",
+        "Move along, please. They took a man off this corner an hour ago for asking the time.",
+        "The great houses on the Via have barred their doors. That means the Federation's hunting someone. Is it you? Don't tell me.",
+        "My shop's closed. I'm closed. Please go, before they look this way.",
+        "Every checkpoint on the Via is doubled, and they're pulling people out of the arcades. Go home, if you've got one.",
+        "They've checked my papers three times in an hour. They're good papers, and my hands are still shaking. Go, please."
+      ],
+      "rumors": [
+        "Servants carried things out of the Valerii house the night before the Federation moved in. Some of it's in a courtyard nearby.",
+        "A jeweler on the Via bricked up his best stock rather than register it. He's gone now. The wall's still here somewhere.",
+        "Shopkeepers hide the good stock from the requisition men. Under the arcade, behind the planters. Look past the roses.",
+        "My aunt swears there's family silver hidden by a fountain along here. She swears a lot of things. This one might be true.",
+        "Someone left a bundle down a side passage off the Via and never came back for it. If it's still there, it's yours.",
+        "Every old family on this street hid a strongbox for bad times. These are bad times, and some families aren't here to open theirs."
+      ]
+    },
+    "quartieri": {
+      "idle": [
+        "Two hundred steps from the bottom of the lane to my door, and the Federation still finds the breath to climb them.",
+        "Everyone in the Quartieri knows everyone. That used to be a comfort. Now it's a list.",
+        "The Ferraro boy was taken in the spring. His mother asks every legionary on these steps where he went. None of them know.",
+        "Lucca's the best gunsmith in Napoli, and the kindest. He fixes their pistols so they leave him be. Nobody holds it against him.",
+        "Someone's always at a window in the Quartieri. Usually it's a grandmother. Usually.",
+        "Legionaries won't come up the narrow lanes after dark. Troopers will. That's one way to tell them apart.",
+        "My neighbor and I pass bread across the lane, balcony to balcony. Last week it was her son's papers, an hour before the search.",
+        "They've painted a number on every door in the Quartieri. Mine's 4-117. Nobody's ever asked my name.",
+        "Curfew bell rings at nine, but up here we're in by eight. You can't run on these steps.",
+        "Federation engineers came to meter our courtyard fountain. We told them it was broken. It's run fine for three hundred years.",
+        "New face on the lane. Nobody's said anything yet. Nobody will, if you keep moving.",
+        "Washing tells you everything up here. Black on the line means a funeral. No washing at all means the trucks came."
+      ],
+      "nervous": [
+        "They're going door to door. Every courtyard, every stair. Please, not my door.",
+        "Shutters are closing all down the lane. Everyone up here knows what that means. Get inside somewhere, or keep going.",
+        "Don't stop here. Every window on this lane is watching, and not all of them are friendly.",
+        "They're dragging people out on the lane below. I've got children upstairs. Please, just go.",
+        "There are troopers on the steps. They don't climb up here for nothing. Whatever you did, take it somewhere else.",
+        "Legionaries are asking who's new on the lane. I won't say. Someone will.",
+        "If they find you in my courtyard, it's my family on the truck. Please."
+      ],
+      "rumors": [
+        "My cousin hid something in one of these courtyards before they took him. I can't go looking. Too many windows.",
+        "There's a dead drop somewhere in these lanes. Whoever used it stopped coming. Up here, that usually means a truck.",
+        "The widow Capasso kept her pension under a flagstone in a courtyard near here. She's been resettled. The flagstone hasn't.",
+        "Somebody stashed a parcel up a dead-end lane round here, behind the washing. Not mine. I'd remember.",
+        "One legionary hid his pay near the old fountain before the Federation audited his barracks. Now he's too scared to fetch it.",
+        "Families up here keep a little something hidden for when the trucks come. Not everyone got to use theirs. Try the courtyards."
+      ]
+    },
+    "castel": {
+      "idle": [
+        "I clean the officers' floors. They step over me like I'm furniture. Furniture hears a lot.",
+        "I cook for the whole garrison. They hate every meal and leave nothing on the plate. Soldiers are the same on every Earth.",
+        "The commander keeps to the minute. You could set the kitchen clocks by his boots on the stairs.",
+        "Don't go near the holding block. We're not even allowed to carry water there now. The troopers do it themselves.",
+        "My grandfather brought me here when it was a museum. Same halls. Different exhibits.",
+        "I file the intake sheets. I don't read them. I decided very early on not to read them.",
+        "They pay us in vouchers and one hot meal. Some of us only stay to hear whose name comes up next.",
+        "Not on the kitchen roster, are you? Carry something and walk like you're late. Everyone in here is.",
+        "They count the cutlery every night. They've never once counted the cleaners.",
+        "Twelve hours a day polishing boots for the people who took my brother. It's work. Work keeps my family off the list.",
+        "The trucks leave before dawn. You hear the engines from the kitchens. After a month you stop hearing them.",
+        "Nobody shouts in here. The troopers write things down. That's worse."
+      ],
+      "nervous": [
+        "There's an alarm on. If they see me talking to you, I'll be in the holding block by supper. Please.",
+        "They've locked the kitchens and they're checking every face against the roster. Yours isn't on it. Go.",
+        "Don't look at me. Don't talk to me. They're watching the staff.",
+        "The troopers are running. They never run. Whatever's happening, I'm not part of it.",
+        "They're taking the staff into the yard one at a time. If they ask me, I've never seen you. Please make that true.",
+        "I've got a pass, a tray and three children. I'm not losing any of them over you. Walk on.",
+        "Every door's being checked twice. Get out of my corridor, please. Now."
+      ],
+      "rumors": [
+        "Troopers skim rings and watches off the intake and stash them round these courtyards. Nobody's supposed to know.",
+        "When the cohort handed the Castel over, their quartermaster hid the mess silver somewhere in the grounds. The cooks swear to it.",
+        "A clerk who was taken last month kept a stash near the barracks. We all know about it. None of us will touch it.",
+        "There's a box under the steps in one of the yards. The trooper who put it there was shipped home. Or worse.",
+        "The cleaners say there's museum gold still bricked up somewhere in these walls. Nobody's had the nerve to look.",
+        "Kitchen staff stash what they lift from the officers' mess somewhere near the parade ground. Help yourself. They'd want you to."
+      ]
+    }
+  },
+  "flee": [
+    "Get down! Everybody down!",
+    "They're shooting! Get off the street!",
+    "Run! Don't look back!",
+    "Leave it, leave it, just run!",
+    "Get the children inside!",
+    "Out of the way! Move!",
+    "They'll take us all for this! Run!",
+    "Not here, not again!",
+    "Shut the doors! Shut the doors!",
+    "Keep low and keep running!"
+  ],
+  "cowering": [
+    "Please. I didn't see anything. I didn't see your face.",
+    "Is it over? Tell me it's over.",
+    "Don't hurt me. I've got nothing worth taking.",
+    "Stay away from me. Wherever you go, the shooting follows.",
+    "Whoever started this, it's the rest of us who'll pay for it. I hope it was worth it.",
+    "I'm staying right here until the boots are gone. Leave me alone."
+  ]
+}

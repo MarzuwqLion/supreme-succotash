@@ -163,7 +163,7 @@ export async function runBot(style: Style, seed: number, areaIndex = 0, carry?: 
       // next few steps would walk into a cone, smoke a watcher who won't move.
       const patrols = w.hostiles.filter((h) => h.state === 'patrol' && h.combat === 'none');
       const seenNow = patrols.filter((h) => inCone(w, h, p.pos));
-      const prey = patrols.find((h) => distXZ(h.pos, p.pos) < 8 && !inCone(w, h, p.pos) && w.physics.clearLine(v3(p.pos.x, 1, p.pos.z), v3(h.pos.x, 1, h.pos.z)));
+      const prey = patrols.find((h) => distXZ(h.pos, p.pos) < 8 && !inCone(w, h, p.pos) && w.physics.clearLine(v3(p.pos.x, p.pos.y + 1, p.pos.z), v3(h.pos.x, h.pos.y + 1, h.pos.z)));
       const goal = prey ? prey.pos : next;
       const dir = normalizeXZ(sub(goal, p.pos));
       const ahead = v3(p.pos.x + dir.x * 2.5, 0, p.pos.z + dir.z * 2.5);

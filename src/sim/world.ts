@@ -1,10 +1,11 @@
 import type { HaleTaunts, IntelId } from '../content/dialogue/types';
 import { Rng, hashSeed } from '../core/rng';
-import { angleDiff, clone, distXZ, segmentHitsSphere, v3, yawTo, type V3 } from '../core/vec';
+import { angleDiff, clone, dist, distXZ, segmentHitsSphere, v3, yawTo, type V3 } from '../core/vec';
 import { tuning } from '../data/tuning';
 import type { InputFrame } from '../input/input';
 import { applyAgentDamage, applyHostileDamage, contextActionFor, resolveMeleeDefense, type ContextAction, type HostileKind } from './damage';
-import type { Cache, Hostile, Interactable, IntelPickup, Npc, NpcWho, Player, Smoke, WeaponSlot } from './entities';
+import type { CameraStyle, Cache, Civilian, Hostile, Interactable, IntelPickup, Npc, NpcWho, Player, Smoke, WeaponSlot } from './entities';
+import { scareCivilians, talkToCivilian, updateCivilian, type CivilianLineKind } from './civilians';
 import type { AreaLayout } from './gen/layout';
 import { updateHostile } from './hostiles';
 import { Nav } from './nav';
@@ -35,6 +36,8 @@ export interface AreaContext {
   areaIntel: IntelId | null;
   /** Hale's radio taunt when entering the Castel. */
   haleTaunt: keyof HaleTaunts | null;
+  /** Camera style the agent starts the area with (a saved setting). */
+  viewStyle?: CameraStyle;
 }
 
 export type KillMethod = 'takedown' | 'execution' | 'melee' | 'gun' | 'throw';
@@ -56,7 +59,8 @@ export type SimEvent =
   | { type: 'shot'; from: V3; to: V3; loud: boolean; byPlayer: boolean; hit: boolean }
   | { type: 'impact'; pos: V3; kind: 'melee' | 'gun' | 'parry' | 'block' | 'dodge' }
   | { type: 'smoke'; pos: V3 }
-  | { type: 'alert'; hostileId: number };
+  | { type: 'alert'; hostileId: number }
+  | { type: 'civilianLine'; civilianId: number; kind: CivilianLineKind | 'flee' };
 
 export interface WorldStats {
   kills: number;
@@ -73,6 +77,7 @@ export class SimWorld {
   readonly suspicion: SuspicionMeter;
   readonly player: Player;
   readonly hostiles: Hostile[] = [];
+  readonly civilians: Civilian[] = [];
   readonly npcs: Npc[] = [];
   readonly caches: Cache[] = [];
   readonly intelPickup: IntelPickup | null;
@@ -90,12 +95,13 @@ export class SimWorld {
   godMode = false;
   /** True once the area is resolved (exit, win, or extraction) so the sim stops emitting. */
   finished = false;
+  private lastFleeShout = -1000;
 
   constructor(R: Rapier, ctx: AreaContext) {
     this.layout = ctx.layout;
     this.areaIndex = ctx.areaIndex;
-    this.physics = new Physics(R, ctx.layout.boxes);
-    this.nav = new Nav(ctx.layout);
+    this.physics = new Physics(R, ctx.layout.boxes, ctx.layout.gridSize * ctx.layout.blockSize);
+    this.nav = new Nav(ctx.layout, (a, b) => this.walkClear(a, b));
     this.rng = new Rng(hashSeed(ctx.runSeed, ctx.areaIndex, 'sim'));
     this.suspicion = new SuspicionMeter(ctx.coverIdentity);
     const p = tuning.player;
@@ -139,6 +145,12 @@ export class SimWorld {
       lastShotFrame: -1000,
       dead: false,
       hurtFlash: 0,
+      cover: null,
+      coverHint: null,
+      crouched: false,
+      viewStyle: ctx.viewStyle ?? 'classic',
+      shoulder: 1,
+      talking: false,
     };
 
     for (const s of ctx.layout.hostiles) this.spawnHostile(s.kind, s.pos, s.yaw, s.route);
@@ -154,6 +166,29 @@ export class SimWorld {
     for (const who of ['lucca', 'lucretia'] as const) {
       const spot = ctx.layout.castSpots[who];
       if (spot) this.npcs.push({ who, pos: clone(spot.pos), yaw: 0, state: 'idle' });
+    }
+    for (const cs of ctx.layout.civilians) {
+      const id = this.nextId++;
+      const body = this.physics.addCharacter(id, cs.pos, 0.3, 0.55, 'civ');
+      this.civilians.push({
+        id,
+        body,
+        pos: clone(cs.pos),
+        prevPos: clone(cs.pos),
+        yaw: cs.yaw,
+        prevYaw: cs.yaw,
+        state: cs.idle ? 'idle' : 'wander',
+        idle: cs.idle,
+        home: clone(cs.pos),
+        path: [],
+        target: null,
+        pathAge: 0,
+        timer: this.rng.int(0, 300),
+        speed: 0,
+        look: cs.look,
+        rumor: cs.rumor,
+        talked: false,
+      });
     }
     if (this.player.intel.has('halesSchedule') && this.haleId !== null) this.haleMarked = true;
     if (ctx.haleTaunt) this.emit({ type: 'haleBark', key: ctx.haleTaunt });
@@ -243,8 +278,13 @@ export class SimWorld {
       h.prevPos = clone(h.pos);
       h.prevYaw = h.yaw;
     }
+    for (const c of this.civilians) {
+      c.prevPos = clone(c.pos);
+      c.prevYaw = c.yaw;
+    }
     updatePlayer(this, input);
     for (const h of this.hostiles) updateHostile(this, h);
+    for (const c of this.civilians) updateCivilian(this, c);
     for (let i = this.smokes.length - 1; i >= 0; i--) {
       const s = this.smokes[i]!;
       if (--s.framesLeft <= 0) this.smokes.splice(i, 1);
@@ -252,6 +292,7 @@ export class SimWorld {
     this.physics.step();
     if (!p.dead) p.pos = this.physics.feet(p.body);
     for (const h of this.hostiles) if (h.body) h.pos = this.physics.feet(h.body);
+    for (const c of this.civilians) c.pos = this.physics.feet(c.body);
     this.refreshContext();
   }
 
@@ -259,13 +300,35 @@ export class SimWorld {
 
   private smokeBlocks(a: V3, b: V3): boolean {
     for (const s of this.smokes) {
-      if (segmentHitsSphere(a, b, v3(s.pos.x, 1.3, s.pos.z), s.radius)) return true;
+      if (segmentHitsSphere(a, b, v3(s.pos.x, s.pos.y + 1.3, s.pos.z), s.radius)) return true;
     }
     return false;
   }
 
   eye(h: Hostile): V3 {
-    return v3(h.pos.x, tuning.hostiles.eyeHeight, h.pos.z);
+    return v3(h.pos.x, h.pos.y + tuning.hostiles.eyeHeight, h.pos.z);
+  }
+
+  /** Points on the agent a hostile can see or shoot: lower when crouched in cover. */
+  playerTargets(): [number, number] {
+    return this.player.crouched ? [0.85, 0.55] : [1.6, 1.0];
+  }
+
+  /** Capsule-ish straight walk check (used by navigation). */
+  walkClear(a: V3, b: V3): boolean {
+    if (Math.abs(a.y - b.y) > 0.6) return false;
+    const ay = a.y + 0.9;
+    const by = b.y + 0.9;
+    const d = Math.hypot(b.x - a.x, b.z - a.z);
+    if (d < 0.05) return true;
+    const nx = (b.x - a.x) / d;
+    const nz = (b.z - a.z) / d;
+    for (const s of [-0.32, 0, 0.32]) {
+      const ox = -nz * s;
+      const oz = nx * s;
+      if (!this.physics.clearLine(v3(a.x + ox, ay, a.z + oz), v3(b.x + ox, by, b.z + oz))) return false;
+    }
+    return true;
   }
 
   /**
@@ -275,15 +338,15 @@ export class SimWorld {
   canSee(h: Hostile, coneDeg: number = tuning.hostiles.visionConeDeg, range: number = tuning.hostiles.visionRange): boolean {
     const p = this.player;
     if (p.dead || h.state === 'dead') return false;
-    const d = distXZ(h.pos, p.pos);
+    const d = dist(h.pos, p.pos);
     if (d > range) return false;
     if (coneDeg < 360) {
       const toward = yawTo(h.pos, p.pos);
       if (Math.abs(angleDiff(h.yaw, toward)) > (coneDeg * Math.PI) / 360) return false;
     }
     const eye = this.eye(h);
-    for (const y of [1.6, 1.0]) {
-      const target = v3(p.pos.x, y, p.pos.z);
+    for (const y of this.playerTargets()) {
+      const target = v3(p.pos.x, p.pos.y + y, p.pos.z);
       if (this.smokeBlocks(eye, target)) continue;
       if (this.physics.clearLine(eye, target)) return true;
     }
@@ -321,9 +384,10 @@ export class SimWorld {
       const r = tuning.hostiles.alertJoinRange;
       for (const o of this.hostiles) {
         if (o === h || o.state === 'alert' || o.state === 'dead' || o.state === 'stoodDown' || o.state === 'conversation') continue;
-        if (distXZ(o.pos, h.pos) <= r) this.alert(o, known, { propagate: false });
+        if (dist(o.pos, h.pos) <= r) this.alert(o, known, { propagate: false });
       }
     }
+    if (was !== 'alert') this.scare(h.pos, tuning.civilians.alertFleeRange);
   }
 
   applySuspicion(change: SuspicionChange): void {
@@ -343,7 +407,18 @@ export class SimWorld {
     const r = tuning.hostiles.loudGunfireAlertRange;
     for (const h of this.hostiles) {
       if (h.state === 'dead' || h.state === 'stoodDown' || h.state === 'conversation') continue;
-      if (distXZ(h.pos, at) <= r) this.alert(h, this.player.pos, { propagate: false });
+      if (dist(h.pos, at) <= r) this.alert(h, this.player.pos, { propagate: false });
+    }
+    this.scare(at, tuning.civilians.fleeRange);
+  }
+
+  /** Civilians near trouble run; one of them shouts about it. */
+  scare(at: V3, radius: number): void {
+    const n = scareCivilians(this, at, radius);
+    if (n > 0 && this.frame - this.lastFleeShout > 240) {
+      this.lastFleeShout = this.frame;
+      const near = this.civilians.filter((c) => c.state === 'flee').sort((a, b) => dist(a.pos, this.player.pos) - dist(b.pos, this.player.pos))[0];
+      if (near) this.emit({ type: 'civilianLine', civilianId: near.id, kind: 'flee' });
     }
   }
 
@@ -373,6 +448,7 @@ export class SimWorld {
       return;
     }
     const res = applyAgentDamage(p, damage, 'melee', outcome === 'blocked');
+    if (outcome === 'hit') p.cover = null;
     this.emit({ type: 'impact', pos: v3(p.pos.x, 1.3, p.pos.z), kind: outcome === 'blocked' ? 'block' : 'melee' });
     if (outcome === 'hit') {
       p.hurtFlash = 12;
@@ -456,6 +532,7 @@ export class SimWorld {
     if (method === 'takedown') this.stats.takedowns++;
     if (method === 'execution') this.stats.executions++;
     this.emit({ type: 'kill', hostileId: h.id, method, kind: h.kind });
+    if (method !== 'takedown' || this.witnesses(h.id).length) this.scare(h.pos, 14);
     if (h.id === this.haleId) {
       this.emit({ type: 'haleBark', key: 'defeated' });
       this.emit({ type: 'haleDown', method });
@@ -483,6 +560,7 @@ export class SimWorld {
     let best: { action: Exclude<ContextAction, null>; id: number; d: number } | null = null;
     for (const h of this.hostiles) {
       if (h.state === 'dead' || h.combat === 'grabbed') continue;
+      if (Math.abs(h.pos.y - p.pos.y) > 1.0) continue;
       const d = distXZ(h.pos, p.pos);
       if (d > tuning.melee.executionRange + 0.2) continue;
       const action = contextActionFor(
@@ -503,23 +581,30 @@ export class SimWorld {
 
     const range = tuning.player.interactRange;
     let candidate: { it: Interactable; d: number } | null = null;
-    const offer = (it: Interactable, d: number) => {
+    const offer = (it: Interactable, d: number, at?: V3) => {
+      if (at && Math.abs(at.y - p.pos.y) > 1.5) return;
       if (d <= range && (!candidate || d < candidate.d)) candidate = { it, d };
     };
     for (const n of this.npcs) {
       if (n.state === 'gone') continue;
       const name = n.who === 'lucca' ? 'Lucca' : 'Lucretia';
-      if (n.state === 'idle') offer({ kind: 'npc', who: n.who, label: `Talk to ${name}` }, distXZ(n.pos, p.pos));
-      else if (n.state === 'helped' && n.who === 'lucca') offer({ kind: 'npc', who: 'lucca', label: "Browse Lucca's stock" }, distXZ(n.pos, p.pos));
+      if (n.state === 'idle') offer({ kind: 'npc', who: n.who, label: `Talk to ${name}` }, distXZ(n.pos, p.pos), n.pos);
+      else if (n.state === 'helped' && n.who === 'lucca') offer({ kind: 'npc', who: 'lucca', label: "Browse Lucca's stock" }, distXZ(n.pos, p.pos), n.pos);
     }
     for (const h of this.hostiles) {
       if (h.state === 'patrol' && h.talkable && !h.talkedDown && h.combat === 'none') {
-        offer({ kind: 'hostile', id: h.id, label: `Talk to ${h.kind === 'legionary' ? 'Legionary' : 'Trooper'}` }, distXZ(h.pos, p.pos));
+        offer({ kind: 'hostile', id: h.id, label: `Talk to ${h.kind === 'legionary' ? 'Legionary' : 'Trooper'}` }, distXZ(h.pos, p.pos), h.pos);
       }
     }
-    for (const c of this.caches) if (!c.opened) offer({ kind: 'cache', id: c.id, label: 'Search cache' }, distXZ(c.pos, p.pos));
-    if (this.intelPickup && !this.intelPickup.taken) offer({ kind: 'intel', label: 'Take documents' }, distXZ(this.intelPickup.pos, p.pos));
-    if (this.exit && this.exit.open) offer({ kind: 'exit', label: 'Leave area' }, distXZ(this.exit.pos, p.pos) - 1);
+    for (const c of this.caches) if (!c.opened) offer({ kind: 'cache', id: c.id, label: 'Search cache' }, distXZ(c.pos, p.pos), c.pos);
+    if (this.intelPickup && !this.intelPickup.taken) offer({ kind: 'intel', label: 'Take documents' }, distXZ(this.intelPickup.pos, p.pos), this.intelPickup.pos);
+    if (this.exit && this.exit.open) offer({ kind: 'exit', label: 'Leave area' }, distXZ(this.exit.pos, p.pos) - 1, this.exit.pos);
+    // Passers-by rank behind everything else at the same distance.
+    for (const c of this.civilians) {
+      if (c.state === 'flee') continue;
+      const d = distXZ(c.pos, p.pos);
+      if (d <= tuning.civilians.talkRange) offer({ kind: 'civilian', id: c.id, label: 'Talk to passer-by' }, d + 0.6, c.pos);
+    }
     p.interact = candidate ? (candidate as { it: Interactable }).it : null;
   }
 
@@ -558,6 +643,13 @@ export class SimWorld {
       case 'exit':
         this.emit({ type: 'exit' });
         break;
+      case 'civilian': {
+        const c = this.civilians.find((x) => x.id === it.id);
+        if (!c) break;
+        const kind = talkToCivilian(this, c);
+        if (kind) this.emit({ type: 'civilianLine', civilianId: c.id, kind });
+        break;
+      }
     }
   }
 

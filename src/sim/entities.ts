@@ -24,6 +24,27 @@ export type PlayerAction =
 
 export type ItemSlot = 'medkit' | 'smoke' | 'jammer';
 
+/** Agent in cover: hugging a wall (high) or crouched behind something low. */
+export interface CoverState {
+  /** Surface normal, pointing out of the cover toward the agent. */
+  normal: V3;
+  low: boolean;
+  /** -1 / +1 when at the left / right end of the cover, else 0. */
+  edge: -1 | 0 | 1;
+  /** 0..1: how far the agent has popped up (low) or leaned out (high) to shoot. */
+  expose: number;
+  /** Frames the stick has been held away from the cover. */
+  pullAway: number;
+  /** Frames since entering (used to slide into place). */
+  frames: number;
+  /** Where the agent is snapping to. */
+  snap: V3 | null;
+  /** Metres leaned out past a high-cover edge (along the cover). */
+  lean: number;
+}
+
+export type CameraStyle = 'classic' | 'shoulder';
+
 export interface Player {
   id: number;
   body: CharBody;
@@ -64,6 +85,17 @@ export interface Player {
   dead: boolean;
   /** Recent hit flash for presentation (frames remaining). */
   hurtFlash: number;
+  cover: CoverState | null;
+  /** A cover surface within reach, for the HUD prompt. */
+  coverHint: { low: boolean } | null;
+  /** Crouched behind low cover (smaller silhouette). */
+  crouched: boolean;
+  /** Third-person style; 'shoulder' is the over-the-shoulder shooter camera. */
+  viewStyle: CameraStyle;
+  /** Which shoulder the shoulder camera sits over (1 = right). */
+  shoulder: 1 | -1;
+  /** In a conversation (the world keeps running; the agent stands still). */
+  talking: boolean;
 }
 
 export type HostileState = 'patrol' | 'challenge' | 'conversation' | 'alert' | 'stoodDown' | 'dead';
@@ -120,6 +152,31 @@ export interface Hostile {
   aimPoint: V3 | null;
 }
 
+export type CivilianState = 'wander' | 'idle' | 'flee' | 'cower';
+
+/** Ambient city dweller. Never hostile, never blocks anyone, can be talked to. */
+export interface Civilian {
+  id: number;
+  body: CharBody;
+  pos: V3;
+  prevPos: V3;
+  yaw: number;
+  prevYaw: number;
+  state: CivilianState;
+  /** Stays near home (sitting, chatting) instead of wandering. */
+  idle: boolean;
+  home: V3;
+  path: V3[];
+  target: V3 | null;
+  pathAge: number;
+  /** Frames to wait (wander pause) or to stay hidden (cower). */
+  timer: number;
+  speed: number;
+  look: number;
+  rumor: boolean;
+  talked: boolean;
+}
+
 export type NpcWho = 'lucca' | 'lucretia';
 
 export interface Npc {
@@ -155,4 +212,5 @@ export type Interactable =
   | { kind: 'hostile'; id: number; label: string }
   | { kind: 'cache'; id: number; label: string }
   | { kind: 'intel'; label: string }
+  | { kind: 'civilian'; id: number; label: string }
   | { kind: 'exit'; label: string };

@@ -15,13 +15,16 @@ export const CONTROLS: [string, string, string][] = [
   ['Heavy', 'Y', 'Q'],
   ['Point-blank shot (during a strike)', 'RT', 'Left mouse'],
   ['Parry (tap) / Block (hold)', 'LB', 'Ctrl or C'],
-  ['Dodge', 'A', 'Space'],
+  ['Roll / take cover (next to cover)', 'A', 'Space'],
   ['Takedown / Execution / Throw', 'B', 'F'],
   ['Aim / Fire', 'LT / RT', 'Right / Left mouse'],
   ['Sprint', 'L3', 'Shift'],
-  ['Lock-on', 'R3', 'Middle mouse'],
+  ['Lock-on (classic) / swap shoulder (shoulder cam)', 'R3', 'Middle mouse'],
+  ['Toggle over-the-shoulder camera', 'D-pad →', 'V'],
   ['Interact (talk, loot, exit)', 'RB', 'R'],
-  ['Swap weapon', 'D-pad ← →', '1, 2'],
+  ['Swap weapon', 'D-pad ←', '1, 2'],
+  ['Answer in conversation', 'D-pad + A', '1-4'],
+  ['Walk away from a conversation', 'Move', 'Move'],
   ['Use item (hold to cycle)', 'D-pad ↑', '3'],
   ['Reload', 'D-pad ↓', 'T'],
   ['Pause', 'Start', 'Esc'],
@@ -198,6 +201,7 @@ export function endScreen(r: RunRecord, lockedNow: OwnedGearId[], haleQuote: str
 }
 
 export function conversationScreen(c: ConversationController, cash: number, device: 'pad' | 'kbm', onChoose: (id: string) => void, onDone: () => void): HTMLElement {
+  const hint = device === 'pad' ? 'D-pad + A to answer · move or attack to walk away' : '1-4 to answer · move or attack to walk away';
   const log = h('div', { class: 'conv-log' }, ...c.log.map((l) => h('div', { class: `line ${l.who}` }, l.who === 'agent' ? `You: ${l.text}` : l.who === 'them' ? `${c.speakerName}: ${l.text}` : l.text)));
   const replies = h('div', { class: 'replies' });
   if (!c.done) {
@@ -223,10 +227,10 @@ export function conversationScreen(c: ConversationController, cash: number, devi
                 ? 'Lucretia takes the money and helps, this once.'
                 : 'Lucretia will help.'
               : 'They stand down.';
-    replies.append(h('div', { class: `result ${c.outcome}` }, label), h('button', { class: 'primary', onclick: onDone }, 'Continue'));
+    replies.append(h('div', { class: `result ${c.outcome}` }, label), h('button', { class: 'primary', onclick: onDone }, device === 'pad' ? 'Continue (A)' : 'Continue (1)'));
   }
   const exch = c.exchange ? `Exchange ${c.exchange.index + 1} of ${c.state.totalExchanges}` : 'Conversation over';
-  const root = h('div', { class: 'screen conv' }, h('div', { class: 'conv-panel' }, h('div', { class: 'conv-head' }, h('b', {}, c.speakerName), h('span', {}, exch)), log, replies));
+  const root = h('div', { class: 'screen conv live' }, h('div', { class: 'conv-panel' }, h('div', { class: 'conv-head' }, h('b', {}, c.speakerName), h('span', {}, exch)), log, replies, h('div', { class: 'conv-hint' }, hint)));
   queueMicrotask(() => (log.scrollTop = log.scrollHeight));
   return root;
 }
@@ -237,14 +241,15 @@ export interface ShopEntry {
   price: number;
 }
 
-export function luccaShopScreen(entries: ShopEntry[], cash: number, discount: boolean, onBuy: (id: ShopEntry['id']) => void, onClose: () => void): HTMLElement {
+export function luccaShopScreen(entries: ShopEntry[], cash: number, discount: boolean, device: 'pad' | 'kbm', onBuy: (id: ShopEntry['id']) => void, onClose: () => void): HTMLElement {
   return h(
     'div',
-    { class: 'screen shop' },
+    { class: 'screen shop live' },
     h('div', { class: 'conv-panel' },
       h('div', { class: 'conv-head' }, h('b', {}, "Lucca's stock"), h('span', {}, `Cash ${cash}${discount ? ' · friend discount' : ''}`)),
-      ...entries.map((e) => h('div', { class: 'shop-row' }, h('span', {}, e.name), h('button', { disabled: cash < e.price, onclick: () => onBuy(e.id) }, `${e.price}`))),
-      h('div', { class: 'row' }, h('button', { class: 'primary', onclick: onClose }, 'Done')),
+      ...entries.map((e, i) => h('div', { class: 'shop-row' }, h('span', {}, `${device === 'kbm' ? `${i + 1}. ` : ''}${e.name}`), h('button', { disabled: cash < e.price, onclick: () => onBuy(e.id) }, `${e.price}`))),
+      h('div', { class: 'row' }, h('button', { class: 'primary', onclick: onClose }, device === 'pad' ? 'Done (RB)' : 'Done (R)')),
+      h('div', { class: 'conv-hint' }, device === 'pad' ? 'D-pad + A to buy · move to walk away' : '1-3 to buy · move to walk away'),
     ),
   );
 }

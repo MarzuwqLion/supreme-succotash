@@ -1,6 +1,10 @@
 # Infinity Mansion: Napoli (MVP)
 
-A gray-box, single-player browser slice for testing mechanics. You play one agent in one city. You get through three procedural areas of occupied Napoli and take down Commander Hale, by fighting, sneaking or talking. The design doc is [`docs/design.md`](docs/design.md), and every choice the doc left open is recorded in [`DECISIONS.md`](DECISIONS.md).
+A single-player browser slice for testing mechanics. You play one agent in one city. You get through three procedural areas of occupied Napoli and take down Commander Hale, by fighting, sneaking or talking.
+
+Napoli is a modern city that never abandoned classical Roman architecture: marble boulevards with no cars, rose gardens, fountains, colonnaded elevated walkways, riverwalks, and white towers among domes, with crowds of citizens going about their day. The look follows [`docs/art-direction.md`](docs/art-direction.md) and the reference images in `docs/reference/`.
+
+The design doc is [`docs/design.md`](docs/design.md), and every choice the doc left open (or that later requests changed) is recorded in [`DECISIONS.md`](DECISIONS.md).
 
 Built with Three.js, Rapier (`@dimforge/rapier3d-compat`), strict TypeScript, Vite, lil-gui and vitest. There are no external art, animation or audio assets: characters are capsule rigs built in code and animated with keyed poses.
 
@@ -9,7 +13,7 @@ Built with Three.js, Rapier (`@dimforge/rapier3d-compat`), strict TypeScript, Vi
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # vitest: 125 tests
+npm test           # vitest: 139 tests
 npm run build      # type-check + production build into dist/
 npm run balance    # optional: headless playtest bots, prints success rates per approach
 ```
@@ -28,19 +32,26 @@ Click the game view to capture the mouse. A gamepad (Xbox layout, standard mappi
 | Heavy (24, 24-frame hitstun) | Y | Q |
 | Point-blank shot (during a strike) | RT | Left mouse |
 | Parry (tap) / Block (hold) | LB | Ctrl or C |
-| Dodge | A | Space |
+| Roll (forward) / take cover next to cover | A | Space |
 | Takedown / Execution / Throw | B | F |
 | Aim / Fire | LT / RT | Right / Left mouse |
 | Sprint | L3 (toggle) | Shift (hold) |
-| Lock-on | R3 | Middle mouse |
+| Lock-on (classic camera) / swap shoulder (shoulder camera) | R3 | Middle mouse |
+| Toggle over-the-shoulder camera | D-pad → | V |
 | Interact (talk, loot, exit) | RB | R |
-| Swap weapon | D-pad ← → | 1, 2 |
+| Swap weapon | D-pad ← | 1, 2 |
 | Use item (hold to cycle) | D-pad ↑ | 3 |
 | Reload (automatic when empty) | D-pad ↓ | T |
 | Pause | Start | Esc |
 | Debug panel | Back | ` (backtick) |
 
-Menus work with the D-pad or arrow keys plus A or Enter, or with the mouse. In conversations, press 1-4 or select a reply.
+Menus work with the D-pad or arrow keys plus A or Enter, or with the mouse.
+
+**Conversations don't pause the game.**
+- **Answering:** press 1-4, or use the D-pad and A.
+- **Walking away:** moving or attacking walks away instantly. Walking out on a Legionary or Trooper counts as a failed conversation.
+
+**In cover:** move along it, aim to pop up (low cover) or lean out at an edge (high cover), and pull away or roll to leave.
 
 Ctrl+W closes the tab in most browsers, so use C to block if you move with WASD. During a run the browser asks before you leave the page.
 
@@ -51,8 +62,10 @@ Ctrl+W closes the tab in most browsers, so use C to block if you move with WASD.
    - On top of that: one extra weapon, one armor upgrade, one gadget, and up to two run-only items.
 2. **Areas 1 and 2.** Two of Porto, Spaccanapoli and Quartieri, in random order. Find the exit (a green beacon), loot caches, and deal with hostiles however you like.
    - **Suspicion** (0-100) is per area and never falls on its own. At 100, every hostile converges on you.
-   - **Legionaries and Troopers** who spot you come over to question you. Each conversation has three exchanges, and charm alone can win any of them. Intel lines and bribes are shortcuts.
+   - **Legionaries and Troopers** who spot you come over to question you. Each conversation has three exchanges, and charm alone can win any of them. Intel lines and bribes are shortcuts. The city keeps moving while you talk.
    - **Lucca** (gunsmith) and **Lucretia** (informant) may appear. They remember you between runs.
+   - **Citizens** fill the streets. Talk to anyone for a line; a few know where a stash is hidden. They scatter when there's shooting.
+   - **Elevated walkways** give height and long sightlines, for you and for sentries. Low cover (planters, parapets, crates, fountains) hides you from anyone on your level.
 3. **Area 3: the Castel garrison.** Hale has escorts and there's no exit. Taking him down in combat or with a stealth Takedown wins the run. *Hale's schedule* intel marks him on the HUD.
 4. **Extraction.** At zero health you're pulled out to the FOB. You keep all cash, and any owned gear you carried locks for exactly one run. Hale holds a grudge if it happened in his garrison.
 
@@ -97,8 +110,10 @@ tests/                  vitest suites (+ tests/bots: headless playtest bots)
 `npm test` covers:
 
 - **Damage, suspicion, trust, and conversation results.** Every Legionary and Trooper script wins by charm alone and fails when played rudely. Lucretia takes three charm-only meetings.
-- **Gear lock** (exactly one run), **saves** (round trip, migration, corrupt data), and **seeded generation** (determinism, the 50 m rule, guaranteed paths, hostile and cache counts).
+- **Gear lock** (exactly one run), **saves** (round trip, migration, corrupt data), and **seeded generation** (determinism, the 50 m rule, connected navigation, hostile, cache and crowd counts, and every navigation link checked against the physics world).
+- **Civilian content** and the **camera spring** at 20-144 fps.
 - **Headless Rapier simulation:**
+  - Stairs onto elevated decks, gravity, low and high cover, the forward roll, the shoulder camera, talking while the world runs.
   - Spotting time, Challenge, Takedown and witnesses.
   - Loud and silenced gunfire, headshots, reload.
   - Parry into Execution, block, Throw, the light string, point-blank shot, dodge i-frames.
@@ -111,8 +126,8 @@ tests/                  vitest suites (+ tests/bots: headless playtest bots)
 | Approach | Areas 1 and 2 success |
 | --- | --- |
 | Talk | 100% |
-| Gun-fu (with aim error) | 80-100% |
-| Stealth (with two smoke grenades) | 50-90% |
+| Gun-fu (with aim error) | 100% |
+| Stealth (with two smoke grenades) | 90-100% |
 
 The bots are crude, so treat these as a floor rather than a measure of player experience.
 
@@ -120,8 +135,10 @@ The bots are crude, so treat these as a floor rather than a measure of player ex
 
 - **Gamepads:** tested with a simulated Xbox-layout pad through the Gamepad API, not physical hardware.
 - **Hostiles don't notice bodies**, and don't react to melee noise or to the agent standing in plain sight once stood down.
-- **The world is flat,** with no stairs, jumping or climbing. There's no crouch, since the doc has none; stealth relies on vision cones, routes, Takedowns and smoke.
-- **Navigation** is a cell graph with straight-line shortcuts, not a navmesh. Hostiles can occasionally scrape along corners.
+- **Vertical movement is stairs only:** no jumping, vaulting, climbing or fall damage. The only crouch is behind low cover.
+- **Civilians are ambient.** They can't be hurt, don't block anyone, and aren't witnesses.
+- **Navigation** is a node graph with straight-line shortcuts, not a navmesh. Characters can occasionally scrape along corners.
+- **No interiors:** buildings are solid. The interior reference image is for future work.
 - **Armor plates and medkits apply instantly,** with no use animation.
 - **Animation** blends keyed poses with no inverse kinematics. Hits use the strike's target rather than limb collision.
 - **Hale's taunts** are subtitles. There's no audio at all.

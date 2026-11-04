@@ -13,6 +13,10 @@ export function openLayout(hostiles: { kind: HostileKind; pos: V3; yaw: number; 
   for (let j = 0; j < n; j++)
     for (let i = 0; i < n; i++) cells.push({ i, j, type: 'piazza', conn: [j > 0, i < n - 1, j < n - 1, i > 0] });
   const spawns: HostileSpawn[] = hostiles.map((h) => ({ kind: h.kind, pos: h.pos, yaw: h.yaw, route: h.route ?? [h.pos], escortOf: h.escortOf }));
+  // A 6 m lattice of nav nodes, fully linked to neighbours (the square is empty).
+  const nodes: V3[] = [];
+  for (let z = 3; z < 72; z += 6) for (let x = 3; x < 72; x += 6) nodes.push(v3(x, 0, z));
+  const links = nodes.map((a) => nodes.map((b, j) => (Math.hypot(a.x - b.x, a.z - b.z) < 8.6 && (a.x !== b.x || a.z !== b.z) ? j : -1)).filter((j) => j >= 0));
   return {
     type: 'porto',
     index: 0,
@@ -21,6 +25,9 @@ export function openLayout(hostiles: { kind: HostileKind; pos: V3; yaw: number; 
     blockSize: 12,
     cells,
     boxes: [],
+    decor: [],
+    nav: { nodes, links },
+    civilians: [],
     entrance: v3(6, 0, 6),
     entranceYaw: 0,
     exit: v3(66, 0, 66),

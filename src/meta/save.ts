@@ -7,7 +7,7 @@ import { tuning } from '../data/tuning';
  * memory, Hale's grudge, and an in-progress run marker.
  */
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const SAVE_KEY = 'infinity-mansion-napoli/save';
 
 export type OwnedGearId = 'revolver' | 'smg' | 'plateCarrier' | 'jammer';
@@ -65,8 +65,14 @@ export interface RunRecord {
   interrupted?: boolean;
 }
 
+export interface Settings {
+  /** Third-person style: 'classic' or the over-the-shoulder shooter camera. */
+  cameraStyle: 'classic' | 'shoulder';
+}
+
 export interface SaveData {
   version: number;
+  settings: Settings;
   cash: number;
   owned: Record<OwnedGearId, boolean>;
   stash: Record<RunItemId, number>;
@@ -106,6 +112,7 @@ export const emptyLoadout = (): Loadout => ({ weapon: null, armor: null, gadget:
 export function defaultSave(): SaveData {
   return {
     version: SAVE_VERSION,
+    settings: { cameraStyle: 'classic' },
     cash: 0,
     owned: { revolver: false, smg: false, plateCarrier: false, jammer: false },
     stash: { smoke: 0, medkit: 0 },
@@ -131,6 +138,7 @@ const isObj = (v: unknown): v is AnyRecord => typeof v === 'object' && v !== nul
  * Step-wise migrations. Each entry upgrades a save from version N to N+1.
  * v0: pre-release saves had no version field and stored cast trust as plain numbers.
  * v1 -> v2: Hale memory gained `pendingTaunt`.
+ * v2 -> v3: player settings (camera style).
  */
 const MIGRATIONS: Record<number, (d: AnyRecord) => AnyRecord> = {
   0: (d) => {
@@ -147,6 +155,7 @@ const MIGRATIONS: Record<number, (d: AnyRecord) => AnyRecord> = {
     const hale = isObj(d.hale) ? d.hale : {};
     return { ...d, version: 2, hale: { ...hale, pendingTaunt: hale.lastOutcome === 'agentExtracted' } };
   },
+  2: (d) => ({ ...d, version: 3, settings: { cameraStyle: 'classic' } }),
 };
 
 /** Deep-merge `raw` onto `defaults`, keeping only keys and types the defaults know. */

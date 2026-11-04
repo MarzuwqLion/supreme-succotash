@@ -47,6 +47,9 @@ export class Hud {
   private subtitle: HTMLElement;
   private vignette: HTMLElement;
   private compass: HTMLElement;
+  private cardEl: HTMLElement;
+  private cardUntil = 0;
+  private coverEl: HTMLElement;
   private messages: Msg[] = [];
   private subtitleUntil = 0;
   private markerPool: HTMLElement[] = [];
@@ -75,6 +78,8 @@ export class Hud {
     this.subtitle = h('div', { class: 'subtitle' });
     this.vignette = h('div', { class: 'vignette' });
     this.compass = h('div', { class: 'compass' });
+    this.cardEl = h('div', { class: 'hud-card' });
+    this.coverEl = h('div', { class: 'cover-state' });
     this.root.append(
       this.vignette,
       this.markers,
@@ -92,7 +97,17 @@ export class Hud {
       this.crosshair,
       this.log,
       this.subtitle,
+      this.cardEl,
+      this.coverEl,
     );
+  }
+
+  /** A document or note shown beside play (nothing pauses). */
+  card(kicker: string, title: string, body: string, seconds = 12): void {
+    this.cardEl.innerHTML = '';
+    this.cardEl.append(h('div', { class: 'kicker' }, kicker), h('b', {}, title), h('p', {}, body));
+    this.cardEl.classList.add('on');
+    this.cardUntil = performance.now() + seconds * 1000;
   }
 
   show(on: boolean): void {
@@ -123,7 +138,7 @@ export class Hud {
     return m;
   }
 
-  update(w: SimWorld, view: GameView, device: 'pad' | 'kbm', cash: number, areaIndex: number): void {
+  update(w: SimWorld, view: GameView, device: 'pad' | 'kbm', cash: number, areaIndex: number, panelOpen = false): void {
     const p = w.player;
     const now = performance.now();
     this.health.style.width = `${(100 * p.health) / p.maxHealth}%`;
@@ -152,11 +167,20 @@ export class Hud {
     this.intel.textContent = p.intel.size ? `Intel: ${[...p.intel].map((i) => INTEL_SHORT[i]).join(', ')}` : '';
 
     const key = (pad: string, kb: string) => `[${device === 'pad' ? pad : kb}]`;
-    this.prompt.textContent = p.interact ? `${key('RB', 'R')} ${p.interact.label}` : '';
     const ctxNames = { takedown: 'Takedown', execution: 'Execution', throw: 'Throw' } as const;
-    this.context.textContent = p.context.action && p.action.kind === 'none' ? `${key('B', 'F')} ${ctxNames[p.context.action]}` : '';
+    if (panelOpen) {
+      this.prompt.textContent = '';
+      this.context.textContent = '';
+    } else {
+      const coverPrompt = !p.cover && p.coverHint ? `${key('A', 'Space')} Take cover${p.coverHint.low ? ' (low)' : ''}` : '';
+      this.prompt.textContent = p.interact ? `${key('RB', 'R')} ${p.interact.label}` : coverPrompt;
+      this.context.textContent = p.context.action && p.action.kind === 'none' ? `${key('B', 'F')} ${ctxNames[p.context.action]}` : '';
+    }
     this.context.className = `prompt context ${p.context.action ?? ''}`;
+    // Shoulder camera keeps a dot on screen; the ring appears when aiming.
     this.crosshair.classList.toggle('on', p.aiming);
+    this.crosshair.classList.toggle('dot', p.viewStyle === 'shoulder' && !p.aiming);
+    this.coverEl.textContent = p.cover ? (p.cover.low ? (p.crouched ? 'Low cover: hidden · aim to pop up' : 'Low cover: exposed') : p.cover.edge !== 0 ? 'High cover: at the edge · aim to lean out' : 'High cover') : '';
     this.vignette.style.opacity = String(p.hurtFlash > 0 ? 0.6 : p.health < 30 ? 0.35 : 0);
 
     // World markers.
@@ -228,6 +252,7 @@ export class Hud {
       return true;
     });
     if (this.subtitleUntil < now) this.subtitle.classList.remove('on');
+    if (this.cardUntil < now) this.cardEl.classList.remove('on');
   }
 
   haleLine(key: keyof typeof content.hale, pick: number): string {

@@ -20,7 +20,11 @@ import { SimWorld, type SimEvent } from '../sim/world';
 import { DebugPanel } from '../ui/debug';
 import { MenuNav } from '../ui/dom';
 import { Hud } from '../ui/hud';
-import { cardScreen, conversationScreen, endScreen, fobScreen, intelScreen, luccaShopScreen, pauseScreen, type ShopEntry } from '../ui/screens';
+import { cardScreen, conversationScreen, endScreen, fobScreen, luccaShopScreen, pauseScreen, type ShopEntry } from '../ui/screens';
+import civilianJson from '../content/dialogue/civilians.json';
+import type { CivilianContent } from '../content/dialogue/types';
+
+const civilianContent = civilianJson as CivilianContent;
 import { ConversationController } from './conversationController';
 import { intelForArea, newRunSession, type RunSession } from './run';
 
@@ -29,7 +33,9 @@ import { intelForArea, newRunSession, type RunSession } from './run';
  * Owns the fixed-step loop; the simulation only advances while playing.
  */
 
-type Mode = 'fob' | 'playing' | 'conversation' | 'shop' | 'modal' | 'paused' | 'card' | 'ended';
+type Mode = 'fob' | 'playing' | 'paused' | 'card' | 'ended';
+/** Panels that run on top of live play (the world keeps going). */
+type Panel = 'conversation' | 'shop' | null;
 
 const INTEL_NAMES: Record<IntelId, string> = { patrolCodes: 'patrol codes', halesSchedule: "Hale's schedule", transportManifest: 'a transport manifest' };
 
@@ -49,6 +55,11 @@ export class Game {
   world: SimWorld | null = null;
   private loadout: Loadout;
   private conversation: ConversationController | null = null;
+  private panel: Panel = null;
+  /** Walking away needs a fresh movement input after the panel opened. */
+  private walkArmed = false;
+  private panelFrames = 0;
+  private convVitals = 0;
   private convTarget: { speaker: 'hostile'; hostileId: number } | { speaker: 'lucca' | 'lucretia' } | null = null;
   private pendingEvents: SimEvent[] = [];
   private cardFrames = 0;
@@ -226,6 +237,7 @@ export class Game {
       coverIdentity: run.coverIdentity,
       areaIntel: intelForArea(run.plan.seed, index, run.carry.intel),
       haleTaunt,
+      viewStyle: this.save.data.settings.cameraStyle,
     });
     this.view.build(this.world);
     this.view.showCones = this.debugCones;
@@ -244,6 +256,7 @@ export class Game {
   }
 
   private disposeWorld(): void {
+    if (this.panel) this.closePanel();
     if (this.world) {
       this.world.dispose();
       this.world = null;
@@ -332,16 +345,8 @@ export class Game {
           this.flushPending();
         }
         break;
-      case 'conversation':
-        this.stepConversationInput(f);
-        break;
       case 'paused':
         if (f.pressed.pause || f.pressed.back) this.resume();
-        else this.nav.handle(f);
-        break;
-      case 'shop':
-      case 'modal':
-        if (f.pressed.back) this.closeModal();
         else this.nav.handle(f);
         break;
       case 'fob':
@@ -370,7 +375,14 @@ export class Game {
       return;
     }
     run.stats.timeFrames++;
-    w.tick(f);
+    const simInput = this.panel ? this.stepPanel(f) : f;
+    w.tick(simInput);
+    if (this.panel) this.checkInterruptions(w);
+    if (w.player.viewStyle !== this.save.data.settings.cameraStyle) {
+      const style = w.player.viewStyle;
+      this.save.update((d) => (d.settings.cameraStyle = style));
+      this.hud.message(style === 'shoulder' ? 'Over-the-shoulder camera' : 'Classic camera', 'info', 2);
+    }
     this.info.frame = w.frame;
     this.info.suspicion = Math.round(w.suspicion.value);
     this.info.hostilesAlive = w.hostiles.filter((h) => h.state !== 'dead').length;
@@ -418,10 +430,19 @@ export class Game {
             this.hud.message(`Valuables: +${amount} cash (banked)`, 'good');
           } else this.hud.message(`Found: ${PICKUP_NAMES[e.loot.item]}`, 'good');
           break;
-        case 'intel':
+        case 'intel': {
           this.hud.message(`Intel: ${INTEL_NAMES[e.intel]}`, 'good');
-          this.openModal(intelScreen(e.intel, () => this.closeModal()));
+          const doc = content.intel.find((d) => d.id === e.intel);
+          if (doc) this.hud.card('Intel acquired', doc.title, doc.body, 14);
           break;
+        }
+        case 'civilianLine': {
+          const lines = e.kind === 'flee' ? civilianContent.flee : e.kind === 'cowering' ? civilianContent.cowering : civilianContent.areas[w.layout.type][e.kind === 'rumor' ? 'rumors' : e.kind];
+          const line = lines[this.barkRng.int(0, lines.length - 1)] ?? '';
+          this.hud.say(e.kind === 'flee' ? 'Someone shouts' : 'Passer-by', line, 4.5);
+          if (e.kind === 'rumor') this.hud.message('A stash is marked on your HUD.', 'good', 4);
+          break;
+        }
         case 'exit':
           if (run.areaIndex < 2) {
             this.leaveArea();
@@ -443,6 +464,14 @@ export class Game {
           else if (e.method === 'execution') this.hud.message('Execution', 'good', 2);
           break;
         case 'conversation':
+          if (this.panel) {
+            // Already talking: a challenger waits their turn.
+            if (e.speaker === 'hostile') {
+              const h = w.hostile(e.hostileId);
+              if (h && h.state === 'conversation') h.state = 'challenge';
+            }
+            break;
+          }
           if (e.speaker === 'hostile') void this.startConversation(e.kind, { speaker: 'hostile', hostileId: e.hostileId });
           else void this.startConversation(e.speaker, { speaker: e.speaker });
           break;
@@ -471,14 +500,121 @@ export class Game {
     this.flushPending();
   }
 
-  private openModal(el: HTMLElement): void {
-    this.mode = 'modal';
-    this.input.releasePointerLock();
-    this.setOverlay(el);
+  // ------------------------------------------------------------ live panels
+
+  private openPanel(kind: Exclude<Panel, null>): void {
+    const w = this.world!;
+    this.panel = kind;
+    this.panelFrames = 0;
+    this.walkArmed = false;
+    this.convVitals = w.player.health + w.player.armor;
+    w.player.talking = true;
+    this.input.wasdNavigates = false;
   }
 
-  private closeModal(): void {
-    this.resume();
+  private closePanel(): void {
+    const w = this.world;
+    this.panel = null;
+    this.conversation = null;
+    this.convTarget = null;
+    this.view.conversationFocus = null;
+    this.info.trustNow = '-';
+    if (w) w.player.talking = false;
+    this.input.wasdNavigates = true;
+    this.setOverlay(null);
+  }
+
+  /**
+   * Input while a conversation or shop panel is open. Any movement (once the
+   * stick or keys have been let go since the panel opened) or any combat
+   * input walks away instantly and goes straight to the agent. Otherwise
+   * the agent stands still and the input drives the panel.
+   */
+  private stepPanel(f: InputFrame): InputFrame {
+    this.panelFrames++;
+    const moved = Math.hypot(f.move.x, f.move.y) > 0.2;
+    if (!moved && this.panelFrames > 2) this.walkArmed = true;
+    const combat = f.pressed.light || f.pressed.heavy || f.pressed.fire || f.pressed.aim || f.pressed.context || f.pressed.block || f.pressed.dodge && !f.pressed.confirm;
+    if ((moved && this.walkArmed) || combat) {
+      this.walkAway();
+      return f;
+    }
+    if (this.panel === 'conversation') {
+      const c = this.conversation;
+      if (c && !c.busy) {
+        if (!c.done) {
+          const choices = c.visibleReplies(this.save.data.cash);
+          const keys = [f.pressed.choice1, f.pressed.choice2, f.pressed.choice3, f.pressed.choice4];
+          for (let i = 0; i < keys.length; i++) {
+            if (keys[i] && choices[i]?.avail.enabled) {
+              void this.chooseReply(choices[i]!.reply.id);
+              return emptyInput(f);
+            }
+          }
+        } else if (f.pressed.interact || f.pressed.choice1) {
+          this.finishConversation();
+          return emptyInput(f);
+        }
+      }
+    } else if (this.panel === 'shop') {
+      const { entries } = this.luccaEntries();
+      const keys = [f.pressed.choice1, f.pressed.choice2, f.pressed.choice3];
+      keys.forEach((k, i) => {
+        if (k && entries[i]) this.buyFromLucca(entries[i]!.id);
+      });
+      if (f.pressed.interact) {
+        this.closePanel();
+        return emptyInput(f);
+      }
+    }
+    this.nav.handle(f);
+    return emptyInput(f);
+  }
+
+  /** Leave mid-conversation. Walking out on a challenge is a failed conversation. */
+  private walkAway(): void {
+    const w = this.world;
+    const run = this.run;
+    const c = this.conversation;
+    const target = this.convTarget;
+    if (!w || !run) return;
+    if (this.panel === 'shop' || !c || !target) {
+      this.closePanel();
+      return;
+    }
+    if (c.done) {
+      this.finishConversation();
+      return;
+    }
+    this.closePanel();
+    if (target.speaker === 'hostile') {
+      run.stats.conversationsLost++;
+      w.applySuspicion(w.suspicion.failedConversation());
+      w.endHostileConversation(target.hostileId, false);
+      this.hud.message('You walked away. They raise the alarm.', 'bad', 4);
+    } else {
+      this.hud.message(`You walked away from ${target.speaker === 'lucca' ? 'Lucca' : 'Lucretia'}. You can talk again later.`, 'info', 4);
+    }
+    this.handleEvents(w.drainEvents());
+  }
+
+  /** The world kept running: getting hurt or the speaker being pulled away ends it. */
+  private checkInterruptions(w: SimWorld): void {
+    const p = w.player;
+    const target = this.convTarget;
+    const vitals = p.health + p.armor;
+    const hurt = vitals < this.convVitals - 0.01;
+    this.convVitals = vitals;
+    if (this.panel === 'shop') {
+      if (hurt || p.dead) this.closePanel();
+      return;
+    }
+    if (!target || !this.conversation) return;
+    const speakerGone = target.speaker === 'hostile' && w.hostile(target.hostileId)?.state !== 'conversation';
+    if (!hurt && !p.dead && !speakerGone) return;
+    this.hud.message('The conversation is cut short.', 'warn', 3);
+    if (speakerGone || p.dead) this.closePanel();
+    else this.walkAway();
   }
 
   // ------------------------------------------------------------ conversations
@@ -486,8 +622,7 @@ export class Game {
   private async startConversation(speaker: SpeakerKind, target: NonNullable<Game['convTarget']>): Promise<void> {
     const w = this.world!;
     const run = this.run!;
-    this.mode = 'conversation';
-    this.input.releasePointerLock();
+    this.openPanel('conversation');
     const named = speaker === 'lucca' || speaker === 'lucretia';
     const memory = named ? this.save.data.cast[speaker] : null;
     const ctx: ConversationContext = {
@@ -506,6 +641,7 @@ export class Game {
     const focus = target.speaker === 'hostile' ? w.hostile(target.hostileId)?.pos : w.npc(target.speaker)?.pos;
     this.view.conversationFocus = focus ?? null;
     await c.begin();
+    if (this.conversation !== c) return; // walked away while the provider was answering
     this.renderConversation();
   }
 
@@ -524,22 +660,6 @@ export class Game {
     );
   }
 
-  private stepConversationInput(f: InputFrame): void {
-    const c = this.conversation;
-    if (!c || c.busy) return;
-    if (!c.done) {
-      const choices = c.visibleReplies(this.save.data.cash);
-      const keys = [f.pressed.choice1, f.pressed.choice2, f.pressed.choice3, f.pressed.choice4];
-      for (let i = 0; i < keys.length; i++) {
-        if (keys[i] && choices[i]?.avail.enabled) {
-          void this.chooseReply(choices[i]!.reply.id);
-          return;
-        }
-      }
-    }
-    this.nav.handle(f);
-  }
-
   private async chooseReply(id: string): Promise<void> {
     const c = this.conversation;
     if (!c || c.busy) return;
@@ -548,7 +668,7 @@ export class Game {
       this.save.update((d) => spendCash(d, spent));
       this.hud.message(`Paid ${spent} cash`, 'info');
     }
-    this.renderConversation();
+    if (this.conversation === c) this.renderConversation();
   }
 
   private finishConversation(): void {
@@ -562,12 +682,7 @@ export class Game {
     if (helped) run.stats.conversationsWon++;
     else if (outcome === 'failure') run.stats.conversationsLost++;
     else run.stats.conversationsPending++;
-    this.conversation = null;
-    this.convTarget = null;
-    this.view.conversationFocus = null;
-    this.info.trustNow = '-';
-    this.mode = 'playing';
-    this.setOverlay(null);
+    this.closePanel();
 
     if (target.speaker === 'hostile') {
       if (helped) {
@@ -598,8 +713,6 @@ export class Game {
     }
     this.handleEvents(w.drainEvents());
     this.flushPending();
-    // Only grab the mouse again if nothing else (shop, intel) took over the screen.
-    if (this.mode === 'playing' && this.lastDevice === 'kbm') this.input.requestPointerLock();
   }
 
   /** A talked-down hostile may reveal the exit, reveal a cache, or hand over intel. */
@@ -656,31 +769,39 @@ export class Game {
     };
   }
 
+  private buyFromLucca(id: ShopEntry['id']): void {
+    const { entries } = this.luccaEntries();
+    const e = entries.find((x) => x.id === id)!;
+    let ok = false;
+    this.save.update((d) => (ok = spendCash(d, e.price)));
+    if (ok && this.world) {
+      this.world.addPickup(id);
+      this.hud.message(`Bought ${e.name}`, 'good');
+    } else this.hud.message('Not enough cash', 'warn', 2);
+    this.renderShop();
+  }
+
+  private renderShop(): void {
+    if (this.panel !== 'shop') return;
+    const { entries, discount } = this.luccaEntries();
+    this.setOverlay(
+      luccaShopScreen(
+        entries,
+        this.save.data.cash,
+        discount,
+        this.lastDevice,
+        (id) => this.buyFromLucca(id),
+        () => this.closePanel(),
+      ),
+    );
+  }
+
   private openLuccaShop(): void {
-    const render = () => {
-      const { entries, discount } = this.luccaEntries();
-      this.setOverlay(
-        luccaShopScreen(
-          entries,
-          this.save.data.cash,
-          discount,
-          (id) => {
-            const e = entries.find((x) => x.id === id)!;
-            let ok = false;
-            this.save.update((d) => (ok = spendCash(d, e.price)));
-            if (ok && this.world) {
-              this.world.addPickup(id);
-              this.hud.message(`Bought ${e.name}`, 'good');
-            }
-            render();
-          },
-          () => this.closeModal(),
-        ),
-      );
-    };
-    this.mode = 'shop';
-    this.input.releasePointerLock();
-    render();
+    const w = this.world;
+    if (!w) return;
+    this.openPanel('shop');
+    this.view.conversationFocus = w.npc('lucca')?.pos ?? null;
+    this.renderShop();
   }
 
   // ------------------------------------------------------------ render
@@ -693,7 +814,8 @@ export class Game {
     }
     const p = w.player;
     let mode: CameraMode = 'explore';
-    if (this.mode === 'conversation') mode = 'conversation';
+    if (this.panel) mode = 'conversation';
+    else if (p.viewStyle === 'shoulder') mode = p.aiming ? 'shoulderAim' : 'shoulder';
     else if (p.aiming) mode = 'aim';
     else {
       const close = w.hostiles.some((h) => h.state === 'alert' && Math.hypot(h.pos.x - p.pos.x, h.pos.z - p.pos.z) < tuning.camera.meleeModeRange);
@@ -702,7 +824,7 @@ export class Game {
     }
     const a = this.mode === 'playing' || this.mode === 'card' ? alpha : 1;
     this.view.render(w, a, dt, mode);
-    this.hud.update(w, this.view, this.lastDevice, this.save.data.cash, this.run?.areaIndex ?? 0);
+    this.hud.update(w, this.view, this.lastDevice, this.save.data.cash, this.run?.areaIndex ?? 0, !!this.panel);
   }
 
   // ------------------------------------------------------------ debug

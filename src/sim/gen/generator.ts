@@ -3,23 +3,44 @@ import { v3, type V3 } from '../../core/vec';
 import { tuning } from '../../data/tuning';
 import type { HostileKind } from '../damage';
 import {
-  DIRS,
-  opposite,
-  type AreaLayout,
-  type AreaType,
-  type Box,
-  type Cell,
-  type CellType,
-  type Dir,
-  type HostileSpawn,
-  type PointSpawn,
-} from './layout';
+  Builder,
+  buildAlley,
+  buildBuilding,
+  buildCanal,
+  buildCourtyard,
+  buildPerimeter,
+  buildPiazza,
+  buildStreet,
+  stairPlan,
+  type DeckPlan,
+  type NodeHint,
+  type OpenCellPlan,
+} from './build';
+import {
+  ALL_DIRS,
+  blockS,
+  carvePath,
+  cellCenter,
+  connCount,
+  connect,
+  findCellPath,
+  gridN,
+  idx,
+  isOpen,
+  makeGrid,
+  neighbor,
+  reachableCells,
+  walkable,
+} from './grid';
+import { opposite, type AreaLayout, type AreaType, type Cell, type CivilianSpawn, type Dir, type HostileSpawn, type PointSpawn } from './layout';
+import { buildNavGraph, NavChecker, nearestNode, pruneGraph, reachableNodes, type NavBuildResult } from './navbuild';
 
 /**
- * Seeded generator. Builds an area on a 6 x 6 grid of 12 m blocks from
- * street, alley, courtyard, and piazza pieces (plus solid buildings), keeps
- * entrance and exit at least 50 m apart with a guaranteed path, and places
- * hostiles, caches, intel, and cast spots. Same options -> same layout.
+ * Seeded generator for an expansive marble Napoli. Areas are a 6 x 6 grid of
+ * blocks built from street, alley, courtyard, and piazza pieces (plus
+ * buildings and riverwalk canals), with elevated promenades, stairs, and
+ * bridges. The entrance and exit are at least 50 m apart with a guaranteed
+ * path. Same options -> same layout.
  */
 
 export interface GenOptions {
@@ -32,96 +53,10 @@ export interface GenOptions {
   extraEscorts?: number;
 }
 
-const N = () => tuning.gen.gridSize;
-const B = () => tuning.gen.blockSize;
-const idx = (i: number, j: number) => j * N() + i;
-const inBounds = (i: number, j: number) => i >= 0 && j >= 0 && i < N() && j < N();
-export const cellCenter = (c: { i: number; j: number }): V3 => v3((c.i + 0.5) * B(), 0, (c.j + 0.5) * B());
+export { cellCenter, findCellPath, idx as cellIndex };
 
-function makeGrid(): Cell[] {
-  const cells: Cell[] = [];
-  for (let j = 0; j < N(); j++) for (let i = 0; i < N(); i++) cells.push({ i, j, type: 'building', conn: [false, false, false, false] });
-  return cells;
-}
-
-function neighbor(cells: Cell[], c: Cell, d: Dir): Cell | null {
-  const { di, dj } = DIRS[d]!;
-  const ni = c.i + di;
-  const nj = c.j + dj;
-  return inBounds(ni, nj) ? cells[idx(ni, nj)]! : null;
-}
-
-function connect(cells: Cell[], a: Cell, d: Dir): void {
-  const b = neighbor(cells, a, d);
-  if (!b) return;
-  a.conn[d] = true;
-  b.conn[opposite(d)] = true;
-}
-
-const walkable = (c: Cell) => c.type !== 'building';
-const connCount = (c: Cell) => c.conn.filter(Boolean).length;
-
-/** BFS over open connections. Returns the cell path (indices) or null. */
-export function findCellPath(cells: Cell[], from: number, to: number): number[] | null {
-  const prev = new Map<number, number>();
-  const q = [from];
-  prev.set(from, -1);
-  while (q.length) {
-    const cur = q.shift()!;
-    if (cur === to) break;
-    const c = cells[cur]!;
-    for (let d = 0 as Dir; d < 4; d = (d + 1) as Dir) {
-      if (!c.conn[d]) continue;
-      const n = neighbor(cells, c, d);
-      if (!n || !walkable(n)) continue;
-      const ni = idx(n.i, n.j);
-      if (prev.has(ni)) continue;
-      prev.set(ni, cur);
-      q.push(ni);
-    }
-  }
-  if (!prev.has(to)) return null;
-  const path: number[] = [];
-  for (let cur = to; cur !== -1; cur = prev.get(cur)!) path.push(cur);
-  return path.reverse();
-}
-
-function reachable(cells: Cell[], from: number): Set<number> {
-  const seen = new Set<number>([from]);
-  const q = [from];
-  while (q.length) {
-    const c = cells[q.shift()!]!;
-    for (let d = 0 as Dir; d < 4; d = (d + 1) as Dir) {
-      if (!c.conn[d]) continue;
-      const n = neighbor(cells, c, d);
-      if (!n || !walkable(n)) continue;
-      const ni = idx(n.i, n.j);
-      if (!seen.has(ni)) {
-        seen.add(ni);
-        q.push(ni);
-      }
-    }
-  }
-  return seen;
-}
-
-/** Carve a wandering but monotone-ish alley path so a route always exists. */
-function carvePath(cells: Cell[], rng: Rng, from: Cell, to: Cell): void {
-  let cur = from;
-  let guard = 0;
-  while ((cur.i !== to.i || cur.j !== to.j) && guard++ < 100) {
-    const options: Dir[] = [];
-    if (to.i > cur.i) options.push(1);
-    if (to.i < cur.i) options.push(3);
-    if (to.j > cur.j) options.push(2);
-    if (to.j < cur.j) options.push(0);
-    const d = rng.pick(options);
-    const next = neighbor(cells, cur, d)!;
-    if (!walkable(next)) next.type = 'alley';
-    connect(cells, cur, d);
-    cur = next;
-  }
-}
+const S = () => blockS();
+const N = () => gridN();
 
 // ---------------------------------------------------------------- styles
 
@@ -131,56 +66,102 @@ interface StyleResult {
   keep: Cell[];
 }
 
-function stylePorto(cells: Cell[], rng: Rng): StyleResult {
-  // Open docks: mostly open quays, a dock road, a few warehouses.
-  const road = rng.int(2, 3);
-  for (const c of cells) {
-    if (c.j === road) c.type = 'street';
-    else c.type = rng.chance(0.2) ? 'building' : 'piazza';
-  }
-  // Long sightlines: open every pair of adjacent walkable cells.
+function connectOpenNeighbours(cells: Cell[], filter: (a: Cell, b: Cell, d: Dir) => boolean = () => true): void {
   for (const c of cells) {
     if (!walkable(c)) continue;
     for (const d of [1, 2] as Dir[]) {
       const n = neighbor(cells, c, d);
-      if (n && walkable(n)) connect(cells, c, d);
+      if (n && walkable(n) && filter(c, n, d)) connect(cells, c, d);
     }
   }
-  const entrance = cells[idx(0, rng.int(0, N() - 1))]!;
-  const exit = cells[idx(N() - 1, rng.int(0, N() - 1))]!;
-  entrance.type = entrance.type === 'building' ? 'piazza' : entrance.type;
-  exit.type = exit.type === 'building' ? 'piazza' : exit.type;
+}
+
+/** Canal cells link along their axis to canal cells, and sideways to anything walkable. */
+function canalFilter(a: Cell, b: Cell, d: Dir): boolean {
+  const along = (c: Cell, dd: Dir) => (c.axis === 'x' ? dd === 1 || dd === 3 : dd === 0 || dd === 2);
+  if (a.type === 'canal' && along(a, d)) return b.type === 'canal' && b.axis === a.axis;
+  if (b.type === 'canal' && along(b, opposite(d))) return a.type === 'canal' && a.axis === b.axis;
+  return true;
+}
+
+function stylePorto(cells: Cell[], rng: Rng): StyleResult {
+  const canal = rng.int(1, N() - 2);
+  for (const c of cells) {
+    if (c.i === canal) {
+      c.type = 'canal';
+      c.axis = 'z';
+    } else if (c.j === 0) {
+      c.type = 'piazza';
+      c.tag = 'quay';
+    } else c.type = rng.chance(0.28) ? 'building' : rng.chance(0.6) ? 'piazza' : 'street';
+  }
+  connectOpenNeighbours(cells, canalFilter);
+  const canals = cells.filter((c) => c.type === 'canal');
+  for (const c of canals) c.bridge = c.j > 0 && rng.chance(tuning.gen.canalBridgeChance);
+  // At least two crossings, one of them in the city half.
+  const inner = canals.filter((c) => c.j >= 1 && c.j <= 3);
+  rng.pick(inner).bridge = true;
+  rng.pick(canals.filter((c) => c.j >= 1)).bridge = true;
+  const ei = rng.pick([...Array(N()).keys()].filter((i) => i !== canal));
+  const entrance = cells[idx(ei, N() - 1)]!;
+  const exit = cells[idx(rng.pick([0, N() - 1]), rng.int(0, 2))]!;
+  for (const c of [entrance, exit]) if (c.type === 'building') c.type = 'street';
   return { entrance, exit, keep: [] };
 }
 
 function styleSpaccanapoli(cells: Cell[], rng: Rng): StyleResult {
-  // One long street with side passages.
   const row = rng.int(1, N() - 2);
-  for (let i = 0; i < N(); i++) {
-    const c = cells[idx(i, row)]!;
-    c.type = 'street';
-    if (i < N() - 1) connect(cells, c, 1);
-  }
+  for (let i = 0; i < N(); i++) cells[idx(i, row)]!.type = 'street';
   const piazzaAt = rng.int(1, N() - 2);
-  if (rng.chance(0.75)) cells[idx(piazzaAt, row)]!.type = 'piazza';
-  // Side passages north and south, sometimes ending in a courtyard.
+  cells[idx(piazzaAt, row)]!.type = 'piazza';
+  let canalRow = -1;
+  if (rng.chance(0.45)) {
+    const options = [row - 2, row + 2].filter((r) => r >= 0 && r < N());
+    if (options.length) {
+      canalRow = rng.pick(options);
+      for (let i = 0; i < N(); i++) {
+        const c = cells[idx(i, canalRow)]!;
+        c.type = 'canal';
+        c.axis = 'x';
+        c.bridge = rng.chance(tuning.gen.canalBridgeChance);
+      }
+      cells[idx(rng.int(1, N() - 2), canalRow)]!.bridge = true;
+    }
+  }
+  for (let i = 0; i < N() - 1; i++) connect(cells, cells[idx(i, row)]!, 1);
+  // Side passages north and south, ending in courtyards or small piazzas.
   for (let i = 0; i < N(); i++) {
     for (const d of [0, 2] as Dir[]) {
-      if (!rng.chance(0.5)) continue;
-      const depth = rng.int(1, 2);
+      if (!rng.chance(0.75)) continue;
+      const depth = rng.int(1, 3);
       let cur = cells[idx(i, row)]!;
       for (let k = 0; k < depth; k++) {
         const n = neighbor(cells, cur, d);
         if (!n) break;
-        if (n.type === 'building') n.type = k === depth - 1 && rng.chance(0.45) ? 'courtyard' : 'alley';
+        if (n.type === 'canal') {
+          connect(cells, cur, d);
+          break;
+        }
+        if (n.type === 'building') n.type = k === depth - 1 ? (rng.chance(0.4) ? 'courtyard' : rng.chance(0.55) ? 'piazza' : 'alley') : rng.chance(0.3) ? 'street' : 'alley';
         connect(cells, cur, d);
         cur = n;
       }
     }
   }
-  // A back lane links some side passages so there is a way around the main street.
+  // Canal promenades connect to whatever touches them.
+  if (canalRow >= 0) {
+    for (let i = 0; i < N() - 1; i++) connect(cells, cells[idx(i, canalRow)]!, 1);
+    for (let i = 0; i < N(); i++) {
+      const c = cells[idx(i, canalRow)]!;
+      for (const d of [0, 2] as Dir[]) {
+        const n = neighbor(cells, c, d);
+        if (n && walkable(n) && n.type !== 'canal') connect(cells, c, d);
+      }
+    }
+  }
+  // A back lane links some passages so there is a way around the boulevard.
   for (const lane of [row - 2, row + 2]) {
-    if (lane < 0 || lane >= N() || !rng.chance(0.7)) continue;
+    if (lane < 0 || lane >= N() || lane === canalRow || !rng.chance(0.7)) continue;
     for (let i = 0; i < N() - 1; i++) {
       const a = cells[idx(i, lane)]!;
       const b = cells[idx(i + 1, lane)]!;
@@ -195,14 +176,13 @@ function styleSpaccanapoli(cells: Cell[], rng: Rng): StyleResult {
 }
 
 function styleQuartieri(cells: Cell[], rng: Rng): StyleResult {
-  // Tight alleys and courtyards: a randomized maze with a few loops.
   for (const c of cells) c.type = 'alley';
   const start = cells[idx(0, rng.int(0, N() - 1))]!;
   const stack: Cell[] = [start];
   const visited = new Set<Cell>([start]);
   while (stack.length) {
     const cur = stack[stack.length - 1]!;
-    const options = ([0, 1, 2, 3] as Dir[]).filter((d) => {
+    const options = ALL_DIRS.filter((d) => {
       const n = neighbor(cells, cur, d);
       return n && !visited.has(n);
     });
@@ -216,263 +196,262 @@ function styleQuartieri(cells: Cell[], rng: Rng): StyleResult {
     visited.add(n);
     stack.push(n);
   }
-  // Loops so it isn't a pure tree.
   for (const c of cells) {
     for (const d of [1, 2] as Dir[]) {
-      if (!c.conn[d] && neighbor(cells, c, d) && rng.chance(0.14)) connect(cells, c, d);
+      if (!c.conn[d] && neighbor(cells, c, d) && rng.chance(0.16)) connect(cells, c, d);
     }
   }
   const exit = cells[idx(N() - 1, rng.int(0, N() - 1))]!;
-  // Dead ends become courtyards; one small piazza somewhere central.
   for (const c of cells) {
     if (c === start || c === exit) continue;
-    if (connCount(c) === 1 && rng.chance(0.55)) c.type = 'courtyard';
+    if (connCount(c) === 1 && rng.chance(0.6)) c.type = 'courtyard';
   }
-  const pz = cells[idx(rng.int(2, 3), rng.int(2, 3))]!;
-  if (pz !== start && pz !== exit) pz.type = 'piazza';
+  // A small piazza (two cells when possible) where the lanes open up.
+  const pi = rng.int(1, N() - 3);
+  const pj = rng.int(1, N() - 2);
+  for (const c of [cells[idx(pi, pj)]!, cells[idx(pi + 1, pj)]!]) {
+    if (c !== start && c !== exit) c.type = 'piazza';
+  }
+  const a = cells[idx(pi, pj)]!;
+  if (a.type === 'piazza' && cells[idx(pi + 1, pj)]!.type === 'piazza') connect(cells, a, 1);
   return { entrance: start, exit, keep: [] };
 }
 
 function styleCastel(cells: Cell[], rng: Rng): StyleResult {
-  // Walled compound: ring road, central parade ground, barracks courtyards,
-  // gate on the south wall, Hale's keep on the north side.
   const last = N() - 1;
-  for (const c of cells) {
-    const ring = c.i >= 1 && c.i <= last - 1 && c.j >= 1 && c.j <= last - 1 && (c.i === 1 || c.i === last - 1 || c.j === 1 || c.j === last - 1);
-    const center = c.i >= 2 && c.i <= last - 2 && c.j >= 2 && c.j <= last - 2;
-    if (ring) c.type = rng.chance(0.3) ? 'alley' : 'street';
-    else if (center) c.type = 'piazza';
-  }
-  // Ring connections.
-  for (const c of cells) {
-    if (c.type !== 'street' && c.type !== 'alley') continue;
-    for (const d of [1, 2] as Dir[]) {
-      const n = neighbor(cells, c, d);
-      if (n && (n.type === 'street' || n.type === 'alley')) connect(cells, c, d);
-    }
-  }
-  // Parade ground is open inside, linked to the ring at 2-3 points.
-  for (const c of cells) {
-    if (c.type !== 'piazza') continue;
-    for (const d of [0, 1, 2, 3] as Dir[]) {
-      const n = neighbor(cells, c, d);
-      if (n && n.type === 'piazza') connect(cells, c, d);
-    }
-  }
-  const centerCells = cells.filter((c) => c.type === 'piazza');
-  const ringLinks = rng.int(2, 3);
-  const edgeLinks: [Cell, Dir][] = [];
-  for (const c of centerCells) {
-    for (const d of [0, 1, 2, 3] as Dir[]) {
-      const n = neighbor(cells, c, d);
-      if (n && (n.type === 'street' || n.type === 'alley')) edgeLinks.push([c, d]);
-    }
-  }
-  rng.shuffle(edgeLinks);
-  for (let k = 0; k < ringLinks && k < edgeLinks.length; k++) connect(cells, edgeLinks[k]![0], edgeLinks[k]![1]);
-  // Gate.
-  const gateI = rng.int(2, last - 2);
-  const gate = cells[idx(gateI, last)]!;
-  gate.type = 'street';
-  connect(cells, gate, 0);
-  // Keep: two piazza cells on the north edge linked to the ring at one point.
   const keepI = rng.int(1, last - 2);
+  for (const c of cells) {
+    const outer = c.i === 0 || c.j === 0 || c.i === last || c.j === last;
+    const center = c.i >= 2 && c.i <= last - 2 && c.j >= 2 && c.j <= last - 2;
+    if (outer) c.type = 'street';
+    else if (center) c.type = 'piazza';
+    else {
+      c.type = 'building';
+      c.style = rng.chance(0.7) ? 'fortress' : 'palazzo';
+    }
+  }
   const keepA = cells[idx(keepI, 0)]!;
   const keepB = cells[idx(keepI + 1, 0)]!;
   for (const k of [keepA, keepB]) {
     k.type = 'courtyard';
     k.tag = 'keep';
   }
-  connect(cells, keepA, 1);
-  connect(cells, rng.chance(0.5) ? keepA : keepB, 2);
-  // Barracks courtyards on the outer ring of cells.
+  // Bailey ring along the walls.
   for (const c of cells) {
-    if (c.type !== 'building' || c.j === 0) continue;
-    if (!(c.i === 0 || c.i === last || c.j === last)) continue;
-    if (!rng.chance(0.3)) continue;
-    const inward = ([0, 1, 2, 3] as Dir[]).filter((d) => {
+    if (!(c.i === 0 || c.j === 0 || c.i === last || c.j === last)) continue;
+    for (const d of [1, 2] as Dir[]) {
       const n = neighbor(cells, c, d);
-      return n && (n.type === 'street' || n.type === 'alley');
-    });
-    if (!inward.length) continue;
-    c.type = 'courtyard';
-    connect(cells, c, rng.pick(inward));
+      if (n && walkable(n) && (n.i === 0 || n.j === 0 || n.i === last || n.j === last)) connect(cells, c, d);
+    }
   }
-  return { entrance: gate, exit: null, keep: [keepA, keepB] };
+  // Parade ground.
+  for (const c of cells) {
+    if (c.type !== 'piazza') continue;
+    for (const d of [1, 2] as Dir[]) {
+      const n = neighbor(cells, c, d);
+      if (n && n.type === 'piazza') connect(cells, c, d);
+    }
+  }
+  cells[idx(2, 2)]!.fountain = true; // the monument
+  // Passages through the inner ring: gate side, keep side, and one or two more.
+  const gateI = rng.int(2, last - 2);
+  const passage = (i: number, j: number, d: Dir) => {
+    const c = cells[idx(i, j)]!;
+    c.type = 'street';
+    c.style = undefined;
+    connect(cells, c, d);
+    connect(cells, c, opposite(d));
+  };
+  passage(gateI, last - 1, 2);
+  passage(rng.pick([keepI, keepI + 1].filter((i) => i >= 2 && i <= last - 2).concat([2])), 1, 0);
+  if (rng.chance(0.7)) passage(1, rng.int(2, last - 2), 3);
+  if (rng.chance(0.7)) passage(last - 1, rng.int(2, last - 2), 1);
+  return { entrance: cells[idx(gateI, last)]!, exit: null, keep: [keepA, keepB] };
 }
 
-// ---------------------------------------------------------------- geometry
+// ---------------------------------------------------------------- plans
 
-function buildGeometry(cells: Cell[], rng: Rng, type: AreaType, reserved: V3[]): Box[] {
-  const g = tuning.gen;
-  const size = B();
-  const half = size / 2;
-  const boxes: Box[] = [];
-  const total = N() * size;
-  const wallH = type === 'castel' ? g.wallHeight + 3 : g.wallHeight;
-  const height = () => rng.range(g.buildingHeightMin, g.buildingHeightMax);
-  const addBox = (minX: number, maxX: number, minZ: number, maxZ: number, h: number, kind: Box['kind']) => {
-    if (maxX - minX < 0.05 || maxZ - minZ < 0.05) return;
-    boxes.push({ x: (minX + maxX) / 2, y: h / 2, z: (minZ + maxZ) / 2, hx: (maxX - minX) / 2, hy: h / 2, hz: (maxZ - minZ) / 2, kind });
-  };
-  const nearReserved = (x: number, z: number, r: number) => reserved.some((p) => Math.hypot(p.x - x, p.z - z) < r);
-
-  // Perimeter.
-  const t = 1;
-  const perimH = type === 'castel' ? wallH + 2 : wallH + 4;
-  addBox(-t, total + t, -t, 0, perimH, 'perimeter');
-  addBox(-t, total + t, total, total + t, perimH, 'perimeter');
-  addBox(-t, 0, 0, total, perimH, 'perimeter');
-  addBox(total, total + t, 0, total, perimH, 'perimeter');
-
+function assignStyles(cells: Cell[], type: AreaType, rng: Rng, entrance: Cell, exit: Cell | null): void {
   for (const c of cells) {
-    const cx = (c.i + 0.5) * size;
-    const cz = (c.j + 0.5) * size;
-    const x0 = cx - half;
-    const x1 = cx + half;
-    const z0 = cz - half;
-    const z1 = cz + half;
-    if (c.type === 'building') {
-      addBox(x0, x1, z0, z1, type === 'castel' ? wallH + rng.range(0, 4) : height(), 'building');
-      continue;
+    if (c.type === 'building' && !c.style) {
+      if (type === 'porto') c.style = rng.chance(0.55) ? 'warehouse' : rng.chance(0.8) ? 'palazzo' : 'tower';
+      else if (type === 'spaccanapoli') c.style = rng.chance(0.75) ? 'palazzo' : 'tower';
+      else if (type === 'castel') c.style = rng.chance(0.7) ? 'fortress' : 'palazzo';
+      else c.style = 'palazzo';
     }
-    if (c.type === 'street' || c.type === 'alley') {
-      const w = c.type === 'street' ? g.streetWidth : g.alleyWidth;
-      const hw = w / 2;
-      const hMass = type === 'castel' ? wallH : height();
-      // Four corner masses.
-      addBox(x0, cx - hw, z0, cz - hw, hMass, 'mass');
-      addBox(cx + hw, x1, z0, cz - hw, hMass, 'mass');
-      addBox(x0, cx - hw, cz + hw, z1, hMass, 'mass');
-      addBox(cx + hw, x1, cz + hw, z1, hMass, 'mass');
-      // Close arms that don't connect.
-      if (!c.conn[0]) addBox(cx - hw, cx + hw, z0, cz - hw, hMass, 'mass');
-      if (!c.conn[2]) addBox(cx - hw, cx + hw, cz + hw, z1, hMass, 'mass');
-      if (!c.conn[3]) addBox(x0, cx - hw, cz - hw, cz + hw, hMass, 'mass');
-      if (!c.conn[1]) addBox(cx + hw, x1, cz - hw, cz + hw, hMass, 'mass');
-      // Street cover: parked cars beside the lanes, off the centre line.
-      if (c.type === 'street') {
-        for (const d of [0, 1, 2, 3] as Dir[]) {
-          if (!c.conn[d] || !rng.chance(0.45)) continue;
-          const side = rng.chance(0.5) ? 1 : -1;
-          const along = 3.6;
-          if (d === 0 || d === 2) {
-            const z = cz + (d === 0 ? -along : along);
-            const x = cx + side * 2.6;
-            if (!nearReserved(x, z, 2.2)) addBox(x - 0.9, x + 0.9, z - 2.0, z + 2.0, 1.5, 'prop');
-          } else {
-            const x = cx + (d === 3 ? -along : along);
-            const z = cz + side * 2.6;
-            if (!nearReserved(x, z, 2.2)) addBox(x - 2.0, x + 2.0, z - 0.9, z + 0.9, 1.5, 'prop');
-          }
-        }
-      }
-      continue;
+    if (c.type === 'piazza' && c.tag !== 'quay' && c !== entrance && c !== exit && type !== 'castel') {
+      const nb = ALL_DIRS.some((d) => neighbor(cells, c, d)?.fountain);
+      c.fountain = !nb && rng.chance(tuning.gen.fountainChance);
     }
-    if (c.type === 'courtyard') {
-      const th = 0.6;
-      const door = 4;
-      const wall = (d: Dir) => {
-        const open = c.conn[d];
-        if (d === 0 || d === 2) {
-          const z = d === 0 ? z0 : z1 - th;
-          if (open) {
-            addBox(x0, cx - door / 2, z, z + th, wallH, 'wall');
-            addBox(cx + door / 2, x1, z, z + th, wallH, 'wall');
-          } else addBox(x0, x1, z, z + th, wallH, 'wall');
-        } else {
-          const x = d === 3 ? x0 : x1 - th;
-          if (open) {
-            addBox(x, x + th, z0 + th, cz - door / 2, wallH, 'wall');
-            addBox(x, x + th, cz + door / 2, z1 - th, wallH, 'wall');
-          } else addBox(x, x + th, z0 + th, z1 - th, wallH, 'wall');
-        }
-      };
-      for (const d of [0, 1, 2, 3] as Dir[]) wall(d);
-      // Cover at the corners (keeps the centre lines clear for navigation).
-      for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
-        if (!rng.chance(0.5)) continue;
-        const x = cx + sx * 3.4;
-        const z = cz + sz * 3.4;
-        if (nearReserved(x, z, 2.0)) continue;
-        const h = rng.chance(0.5) ? 1.1 : 2.2;
-        addBox(x - 0.8, x + 0.8, z - 0.8, z + 0.8, h, 'prop');
-      }
-      continue;
-    }
-    // Piazza: open, with walls only where it meets an unconnected walkable cell.
-    for (const d of [0, 1, 2, 3] as Dir[]) {
-      if (c.conn[d]) continue;
-      const n = neighbor(cells, c, d);
-      if (!n || n.type === 'building') continue;
-      if (n.type === 'piazza' && n.conn[opposite(d)]) continue;
-      const th = 0.5;
-      if (d === 0) addBox(x0, x1, z0, z0 + th, wallH * 0.6, 'wall');
-      if (d === 2) addBox(x0, x1, z1 - th, z1, wallH * 0.6, 'wall');
-      if (d === 3) addBox(x0, x0 + th, z0, z1, wallH * 0.6, 'wall');
-      if (d === 1) addBox(x1 - th, x1, z0, z1, wallH * 0.6, 'wall');
-    }
-    const quads = rng.shuffle([[-1, -1], [1, -1], [-1, 1], [1, 1]] as [number, number][]);
-    const props = type === 'porto' ? rng.int(2, 3) : rng.int(1, 2);
-    for (let k = 0; k < props; k++) {
-      const [sx, sz] = quads[k]!;
-      const x = cx + sx * 3.2;
-      const z = cz + sz * 3.2;
-      if (nearReserved(x, z, 2.4)) continue;
-      if (type === 'porto') {
-        // Container stacks: tall enough to break sightlines.
-        const long = rng.chance(0.5);
-        const hx = long ? 1.6 : 1.2;
-        const hz = long ? 1.2 : 1.6;
-        addBox(x - hx, x + hx, z - hz, z + hz, rng.chance(0.6) ? 2.6 : 5.2, 'prop');
-      } else {
-        addBox(x - 1.0, x + 1.0, z - 1.0, z + 1.0, rng.chance(0.5) ? 1.2 : 2.6, 'prop');
-      }
+    if (c === entrance || c === exit) c.fountain = false;
+  }
+}
+
+const deckSideAllowed = (cells: Cell[], c: Cell, d: Dir): boolean => {
+  if (!isOpen(c) || c.conn[d]) return false;
+  if (c.type === 'canal' && ((c.axis === 'x' && (d === 1 || d === 3)) || (c.axis === 'z' && (d === 0 || d === 2)))) return false;
+  if (c.tag === 'quay' && d === 0) return false;
+  const n = neighbor(cells, c, d);
+  return !n || n.type === 'building';
+};
+
+/** Decide elevated promenades, stairs, and bridges for every open cell. */
+function planDecks(cells: Cell[], type: AreaType, rng: Rng, noDecks: boolean): Map<number, OpenCellPlan> {
+  const plans = new Map<number, OpenCellPlan>();
+  for (const c of cells) if (isOpen(c)) plans.set(idx(c.i, c.j), { decks: [], bridge: null });
+  if (noDecks) return plans;
+  const chance = tuning.gen.deckChance[type];
+  const has = (c: Cell | null, d: Dir) => !!c && !!plans.get(idx(c.i, c.j))?.decks.some((p) => p.side === d);
+  for (const c of cells) {
+    if (!isOpen(c)) continue;
+    for (const d of ALL_DIRS) {
+      if (!deckSideAllowed(cells, c, d)) continue;
+      const prev = neighbor(cells, c, d === 0 || d === 2 ? 3 : 0);
+      const p = has(prev, d) ? Math.min(0.95, chance * 1.6) : chance;
+      if (rng.chance(p)) plans.get(idx(c.i, c.j))!.decks.push({ side: d, stair: null, contStart: false, contEnd: false, trimStart: false, trimEnd: false, bridgeGap: null });
     }
   }
-  return boxes;
+  // Continuity and corner trims.
+  for (const c of cells) {
+    const plan = plans.get(idx(c.i, c.j));
+    if (!plan) continue;
+    for (const dp of plan.decks) {
+      const alongX = dp.side === 0 || dp.side === 2;
+      const startN = neighbor(cells, c, alongX ? 3 : 0);
+      const endN = neighbor(cells, c, alongX ? 1 : 2);
+      dp.contStart = has(startN, dp.side);
+      dp.contEnd = has(endN, dp.side);
+      dp.trimStart = plan.decks.some((o) => o.side === (alongX ? 3 : 0));
+      dp.trimEnd = plan.decks.some((o) => o.side === (alongX ? 1 : 2));
+    }
+  }
+  // Runs of decks along a line: each needs at least one stair.
+  const runs: { cell: Cell; deck: DeckPlan }[][] = [];
+  const seen = new Set<DeckPlan>();
+  for (const c of cells) {
+    const plan = plans.get(idx(c.i, c.j));
+    if (!plan) continue;
+    for (const dp of plan.decks) {
+      if (seen.has(dp) || dp.contStart) continue;
+      const run: { cell: Cell; deck: DeckPlan }[] = [];
+      let cur: Cell | null = c;
+      let curDeck: DeckPlan | undefined = dp;
+      while (cur && curDeck) {
+        seen.add(curDeck);
+        run.push({ cell: cur, deck: curDeck });
+        if (!curDeck.contEnd) break;
+        cur = neighbor(cells, cur, curDeck.side === 0 || curDeck.side === 2 ? 1 : 2);
+        curDeck = cur ? plans.get(idx(cur.i, cur.j))?.decks.find((o) => o.side === dp.side) : undefined;
+      }
+      runs.push(run);
+    }
+  }
+  const stairCells = new Set<number>();
+  for (const run of runs) {
+    let placed = 0;
+    run.forEach((r, k) => {
+      if (k % 3 !== 0 && placed > 0) return;
+      const ci = idx(r.cell.i, r.cell.j);
+      if (stairCells.has(ci)) return;
+      const dir: 1 | -1 | null = !r.deck.trimStart ? 1 : !r.deck.trimEnd ? -1 : null;
+      if (dir === null) return;
+      r.deck.stair = stairPlan(dir);
+      stairCells.add(ci);
+      placed++;
+    });
+    if (!placed) for (const r of run) plans.get(idx(r.cell.i, r.cell.j))!.decks = plans.get(idx(r.cell.i, r.cell.j))!.decks.filter((o) => o !== r.deck);
+  }
+  // Bridges across streets and piazzas with decks on opposite sides.
+  for (const c of cells) {
+    if (c.type !== 'street' && c.type !== 'piazza') continue;
+    const plan = plans.get(idx(c.i, c.j))!;
+    for (const [a, b] of [
+      [0, 2],
+      [3, 1],
+    ] as [Dir, Dir][]) {
+      const da = plan.decks.find((p) => p.side === a);
+      const db = plan.decks.find((p) => p.side === b);
+      if (!da || !db || !rng.chance(tuning.gen.bridgeChance)) continue;
+      const stairs = [da.stair, db.stair].filter((x): x is NonNullable<typeof x> => !!x);
+      const gap = ([[4, 8], [-8, -4]] as [number, number][]).find(([g0, g1]) => stairs.every((s) => g1 <= s.u0 || g0 >= s.u1));
+      if (!gap) continue;
+      da.bridgeGap = gap;
+      db.bridgeGap = gap;
+      plan.bridge = { side: a, gap };
+      break;
+    }
+  }
+  return plans;
+}
+
+// ---------------------------------------------------------------- build
+
+interface Built {
+  builder: Builder;
+  nav: NavBuildResult;
+  entranceNode: number;
+  goalNode: number;
+}
+
+function buildAll(cells: Cell[], type: AreaType, seed: number, style: StyleResult, plans: Map<number, OpenCellPlan>, noProps: boolean): Built | null {
+  const b = new Builder(new Rng(hashSeed(seed, 'geometry')), type);
+  const deckedFacing = (c: Cell, d: Dir) => {
+    const n = neighbor(cells, c, d);
+    return !!n && !!plans.get(idx(n.i, n.j))?.decks.some((p) => p.side === opposite(d));
+  };
+  for (const c of cells) {
+    const ci = idx(c.i, c.j);
+    const plan = plans.get(ci) ?? { decks: [], bridge: null };
+    switch (c.type) {
+      case 'building':
+        buildBuilding(b, cells, c, ci, (d) => deckedFacing(c, d));
+        break;
+      case 'street':
+        buildStreet(b, cells, c, ci, plan);
+        break;
+      case 'piazza':
+        buildPiazza(b, cells, c, ci, plan);
+        break;
+      case 'courtyard':
+        buildCourtyard(b, cells, c, ci);
+        break;
+      case 'alley':
+        buildAlley(b, cells, c, ci);
+        break;
+      case 'canal':
+        buildCanal(b, cells, c, ci, plan);
+        break;
+    }
+  }
+  const gates: { cell: Cell; side: Dir }[] = [];
+  for (const c of [style.entrance, style.exit].filter((x): x is Cell => !!x)) {
+    const side = ALL_DIRS.find((d) => !neighbor(cells, c, d));
+    if (side !== undefined && !(type === 'porto' && side === 0)) gates.push({ cell: c, side });
+  }
+  buildPerimeter(b, type, gates);
+  if (noProps) {
+    const drop = new Set(['planter', 'crate', 'bench', 'bollard']);
+    for (let k = b.boxes.length - 1; k >= 0; k--) if (drop.has(b.boxes[k]!.look)) b.boxes.splice(k, 1);
+  }
+  const extent = N() * S();
+  const raw = buildNavGraph({ boxes: b.boxes, hints: b.nodes, ramps: b.ramps, surfaces: b.surfaces, voids: b.voids, groundBridges: b.groundBridges, extent });
+  const ec = cellCenter(style.entrance);
+  const e = nearestNode(raw, ec, 0.5);
+  if (e < 0) return null;
+  const reach = reachableNodes(raw, e);
+  const nav = pruneGraph(raw, reach);
+  const entranceNode = nearestNode(nav, ec, 0.5);
+  const goalCell = style.exit ?? style.keep[0]!;
+  const gc = cellCenter(goalCell);
+  const goalNode = nearestNode(nav, gc, 0.5);
+  if (goalNode < 0) return null;
+  // The goal must actually be inside its cell, not just "nearest".
+  const gn = nav.nodes[goalNode]!;
+  if (Math.hypot(gn.x - gc.x, gn.z - gc.z) > S() * 0.6) return null;
+  return { builder: b, nav, entranceNode, goalNode };
 }
 
 // ---------------------------------------------------------------- placement
-
-/** A side spot inside a cell that is off the navigation centre lines. */
-function sideSpot(c: Cell, rng: Rng): V3 {
-  const ctr = cellCenter(c);
-  if (c.type === 'street' || c.type === 'alley') {
-    const w = c.type === 'street' ? tuning.gen.streetWidth : tuning.gen.alleyWidth;
-    const closed = ([0, 1, 2, 3] as Dir[]).filter((d) => !c.conn[d]);
-    if (!closed.length) {
-      // Crossroads: tuck into a corner of the centre square, off both lanes.
-      const o = w / 2 - 0.6;
-      return v3(ctr.x + (rng.chance(0.5) ? o : -o), 0, ctr.z + (rng.chance(0.5) ? o : -o));
-    }
-    const d = rng.pick(closed);
-    const off = w / 2 - 0.7;
-    return v3(ctr.x + DIRS[d]!.di * off, 0, ctr.z + DIRS[d]!.dj * off);
-  }
-  const sx = rng.chance(0.5) ? 1 : -1;
-  const sz = rng.chance(0.5) ? 1 : -1;
-  return v3(ctr.x + sx * 4.2, 0, ctr.z + sz * 4.2);
-}
-
-function routeFrom(cells: Cell[], start: Cell, rng: Rng, maxCells: number): V3[] {
-  const route: V3[] = [cellCenter(start)];
-  let cur = start;
-  const used = new Set<Cell>([start]);
-  const len = rng.int(0, maxCells - 1);
-  for (let k = 0; k < len; k++) {
-    const options = ([0, 1, 2, 3] as Dir[]).filter((d) => {
-      if (!cur.conn[d]) return false;
-      const n = neighbor(cells, cur, d);
-      return n && walkable(n) && !used.has(n) && n.tag !== 'keep';
-    });
-    if (!options.length) break;
-    cur = neighbor(cells, cur, rng.pick(options))!;
-    used.add(cur);
-    route.push(cellCenter(cur));
-  }
-  return route;
-}
 
 function hostileKindFor(type: AreaType, rng: Rng): HostileKind {
   switch (type) {
@@ -486,18 +465,30 @@ function hostileKindFor(type: AreaType, rng: Rng): HostileKind {
   }
 }
 
+/** Random walk over the graph on one level, for patrol routes. */
+function routeFrom(nav: NavBuildResult, start: number, rng: Rng, steps: number, avoid: Set<number>): V3[] {
+  const route = [nav.nodes[start]!];
+  let cur = start;
+  const used = new Set([start]);
+  for (let k = 0; k < steps; k++) {
+    const options = nav.links[cur]!.filter((n) => !used.has(n) && !avoid.has(n) && Math.abs(nav.nodes[n]!.y - nav.nodes[cur]!.y) < 0.3 && Math.hypot(nav.nodes[n]!.x - nav.nodes[cur]!.x, nav.nodes[n]!.z - nav.nodes[cur]!.z) > 4);
+    if (!options.length) break;
+    cur = rng.pick(options);
+    used.add(cur);
+    route.push(nav.nodes[cur]!);
+  }
+  return route;
+}
+
 export function generateArea(opts: GenOptions): AreaLayout {
   const g = tuning.gen;
   const seed = hashSeed(opts.seed, opts.type, opts.index);
-  const rng = new Rng(seed);
-  const layoutRng = rng.fork('layout');
-  const placeRng = rng.fork('place');
-  const geoRng = rng.fork('geometry');
-
-  let cells = makeGrid();
-  let style: StyleResult;
-  let attempts = 0;
-  for (;;) {
+  let built: Built | null = null;
+  let cells: Cell[] = [];
+  let style!: StyleResult;
+  let pathCells: number[] = [];
+  for (let attempt = 0; attempt < 6 && !built; attempt++) {
+    const layoutRng = new Rng(hashSeed(seed, 'layout', attempt));
     cells = makeGrid();
     style =
       opts.type === 'porto'
@@ -508,83 +499,101 @@ export function generateArea(opts: GenOptions): AreaLayout {
             ? styleQuartieri(cells, layoutRng)
             : styleCastel(cells, layoutRng);
     const goal = style.exit ?? style.keep[0]!;
-    const d = Math.hypot((style.entrance.i - goal.i) * B(), (style.entrance.j - goal.j) * B());
-    if (d >= g.minEntranceExitDistance || attempts++ > 20) break;
-  }
-  const entrance = style.entrance;
-  const goal = style.exit ?? style.keep[0]!;
-  entrance.tag = 'entrance';
-  if (style.exit) style.exit.tag = 'exit';
-  if (entrance.type === 'building') entrance.type = 'alley';
-  if (goal.type === 'building') goal.type = 'alley';
-
-  // Guarantee a path, then drop anything the entrance can't reach.
-  const ei = idx(entrance.i, entrance.j);
-  const gi = idx(goal.i, goal.j);
-  if (!findCellPath(cells, ei, gi)) carvePath(cells, layoutRng, entrance, goal);
-  const reach = reachable(cells, ei);
-  for (const c of cells) {
-    const ci = idx(c.i, c.j);
-    if (walkable(c) && !reach.has(ci)) {
-      c.type = 'building';
-      c.conn = [false, false, false, false];
+    const ec = cellCenter(style.entrance);
+    const gc = cellCenter(goal);
+    if (Math.hypot(ec.x - gc.x, ec.z - gc.z) < g.minEntranceExitDistance) continue;
+    style.entrance.tag = style.entrance.tag ?? 'entrance';
+    if (style.exit) style.exit.tag = 'exit';
+    for (const c of [style.entrance, goal]) if (c.type === 'canal' || c.type === 'building') c.type = 'street';
+    const ei = idx(style.entrance.i, style.entrance.j);
+    const gi = idx(goal.i, goal.j);
+    if (!findCellPath(cells, ei, gi)) carvePath(cells, layoutRng, style.entrance, goal);
+    const reach = reachableCells(cells, ei);
+    for (const c of cells) {
+      if (walkable(c) && !reach.has(idx(c.i, c.j))) {
+        c.type = 'building';
+        c.conn = [false, false, false, false];
+        c.bridge = false;
+      }
     }
-  }
-  // Clear connections that point at buildings (keeps geometry consistent).
-  for (const c of cells) {
-    for (const d of [0, 1, 2, 3] as Dir[]) {
-      const n = neighbor(cells, c, d);
-      if (c.conn[d] && (!n || !walkable(n) || !walkable(c))) c.conn[d] = false;
+    for (const c of cells) {
+      for (const d of ALL_DIRS) {
+        const n = neighbor(cells, c, d);
+        if (c.conn[d] && (!n || !walkable(n) || !walkable(c))) c.conn[d] = false;
+      }
     }
+    // Later attempts get more forgiving: every canal crossing bridged, then no decks, then no props.
+    if (attempt >= 1) for (const c of cells) if (c.type === 'canal') c.bridge = true;
+    assignStyles(cells, opts.type, layoutRng, style.entrance, style.exit);
+    pathCells = findCellPath(cells, ei, gi) ?? [ei];
+    const plans = planDecks(cells, opts.type, layoutRng, attempt >= 3);
+    built = buildAll(cells, opts.type, seed, style, plans, attempt >= 4);
   }
-  const pathCells = findCellPath(cells, ei, gi) ?? [ei];
+  if (!built) throw new Error(`generator failed for ${opts.type} seed ${opts.seed}`);
+  const { builder, nav, entranceNode, goalNode } = built;
+  const placeRng = new Rng(hashSeed(seed, 'place'));
+  const extent = N() * S();
+  const checker = new NavChecker({ boxes: builder.boxes, hints: [], ramps: [], surfaces: builder.surfaces, voids: builder.voids, groundBridges: builder.groundBridges, extent });
+  const entrancePos = { ...nav.nodes[entranceNode]! };
+  const exitPos = style.exit ? { ...nav.nodes[goalNode]! } : null;
+  const isKeep = (n: number) => cells[nav.cells[n]!]?.tag === 'keep';
+  const dist = (a: V3, b: V3) => Math.hypot(a.x - b.x, a.z - b.z);
+  const ground = [...nav.nodes.keys()].filter((n) => nav.nodes[n]!.y < 0.5);
+  const used = new Set<number>([entranceNode, goalNode]);
 
-  // ---- placement
-  const entrancePos = cellCenter(entrance);
-  const exitPos = style.exit ? cellCenter(style.exit) : null;
-  const walkCells = cells.filter(walkable);
-  const pathSet = new Set(pathCells);
-  const farFromEntrance = (c: Cell) => Math.hypot(cellCenter(c).x - entrancePos.x, cellCenter(c).z - entrancePos.z) >= 20;
-
-  // Caches prefer dead ends, courtyards, and piazzas off the main path.
-  const cacheCandidates = placeRng.shuffle(
-    walkCells.filter((c) => c !== entrance && c.tag !== 'exit' && c.tag !== 'keep'),
-  );
-  cacheCandidates.sort((a, b) => {
-    const score = (c: Cell) => (connCount(c) === 1 ? 2 : 0) + (c.type === 'courtyard' ? 1.5 : 0) + (pathSet.has(idx(c.i, c.j)) ? -1 : 1);
-    return score(b) - score(a);
-  });
-  const nCaches = placeRng.int(g.cachesMin, g.cachesMax);
-  const usedCells = new Set<Cell>();
-  const caches: PointSpawn[] = [];
-  for (const c of cacheCandidates) {
-    if (caches.length >= nCaches) break;
-    if (usedCells.has(c)) continue;
-    usedCells.add(c);
-    caches.push({ pos: sideSpot(c, placeRng), cell: idx(c.i, c.j) });
-  }
-  // Fallback: if the area is tiny, reuse cells.
-  for (let k = 0; caches.length < nCaches && k < 20; k++) {
-    const c = placeRng.pick(walkCells);
-    caches.push({ pos: sideSpot(c, placeRng), cell: idx(c.i, c.j) });
-  }
-
-  const pickFree = (pred: (c: Cell) => boolean): Cell | null => {
-    const opts2 = placeRng.shuffle(walkCells.filter((c) => !usedCells.has(c) && pred(c)));
-    const c = opts2[0] ?? placeRng.shuffle(walkCells.filter(pred))[0] ?? null;
-    if (c) usedCells.add(c);
-    return c;
+  /** A spot near a node, nudged off the walkway when there is room. */
+  const spotNear = (n: number): V3 => {
+    const p = nav.nodes[n]!;
+    for (let k = 0; k < 8; k++) {
+      const a = placeRng.range(0, Math.PI * 2);
+      const r = placeRng.range(0.8, 1.6);
+      const q = v3(p.x + Math.cos(a) * r, p.y, p.z + Math.sin(a) * r);
+      if (checker.pointFree(q)) return q;
+    }
+    return { ...p };
   };
+  /** Pick spread-out nodes; relaxes spacing and the entrance buffer if the area is tight. */
+  const pickNodes = (pool: number[], count: number, minDistEntrance: number, score: (n: number) => number): number[] => {
+    const out: number[] = [];
+    for (const [spacing, entranceScale] of [
+      [10, 1],
+      [6, 0.75],
+      [3, 0.5],
+      [0, 0.3],
+    ] as const) {
+      const cands = placeRng.shuffle(pool.filter((n) => !used.has(n) && dist(nav.nodes[n]!, entrancePos) >= minDistEntrance * entranceScale));
+      cands.sort((a, b) => score(b) - score(a));
+      for (const n of cands) {
+        if (out.length >= count) break;
+        if (out.some((o) => dist(nav.nodes[o]!, nav.nodes[n]!) < spacing)) continue;
+        out.push(n);
+        used.add(n);
+      }
+      if (out.length >= count) break;
+    }
+    return out;
+  };
+  const pathSet = new Set(pathCells);
+  const cellOfNode = (n: number) => cells[nav.cells[n]!]!;
 
+  // Caches prefer gardens, porticos, quays, and cells off the main path.
+  const cacheScore = (n: number) => {
+    const c = cellOfNode(n);
+    const t = nav.tags[n];
+    return (t === 'garden' || t === 'portico' || t === 'quay' ? 2 : 0) + (c.type === 'courtyard' ? 1.5 : 0) + (pathSet.has(nav.cells[n]!) ? -1 : 1) + (connCount(c) === 1 ? 1 : 0) + placeRng.next();
+  };
+  const nCaches = placeRng.int(g.cachesMin, g.cachesMax);
+  const caches: PointSpawn[] = pickNodes(ground.filter((n) => !isKeep(n)), nCaches, 20, cacheScore).map((n) => ({ pos: spotNear(n), cell: nav.cells[n]! }));
   let intel: PointSpawn | null = null;
   if (opts.type !== 'castel') {
-    const c = pickFree((c) => c !== entrance && c.tag !== 'exit');
-    if (c) intel = { pos: sideSpot(c, placeRng), cell: idx(c.i, c.j) };
+    const n = pickNodes(ground, 1, 25, cacheScore)[0];
+    if (n !== undefined) intel = { pos: spotNear(n), cell: nav.cells[n]! };
   }
+  const castScore = (n: number) => (nav.tags[n] === 'portico' || nav.tags[n] === 'promenade' || nav.tags[n] === 'garden' ? 2 : 0) + placeRng.next();
   const castSpot = (present: boolean | undefined): PointSpawn | null => {
     if (!present) return null;
-    const c = pickFree((c) => c !== entrance && c.tag !== 'exit' && c.tag !== 'keep');
-    return c ? { pos: sideSpot(c, placeRng), cell: idx(c.i, c.j) } : null;
+    const n = pickNodes(ground.filter((x) => !isKeep(x)), 1, 18, castScore)[0];
+    return n === undefined ? null : { pos: spotNear(n), cell: nav.cells[n]! };
   };
   const lucca = castSpot(opts.luccaPresent);
   const lucretia = castSpot(opts.lucretiaPresent);
@@ -595,77 +604,84 @@ export function generateArea(opts: GenOptions): AreaLayout {
   const isCastel = opts.type === 'castel';
   const total = isCastel ? placeRng.int(g.hostilesMinArea3, g.hostilesMaxArea3) : placeRng.int(g.hostilesMinArea12, g.hostilesMaxArea12);
   if (isCastel) {
-    const keep = style.keep;
-    const halePos = cellCenter(keep[0]!);
+    const keepNodes = [...nav.nodes.keys()].filter(isKeep);
+    // Rounds: a long, readable walk between the two keep courts, pausing at each end.
+    const route = style.keep.map((k) => nav.nodes[nearestNode(nav, cellCenter(k), 0.5)]!).filter(Boolean);
+    const start = route[0] ?? nav.nodes[goalNode]!;
     haleIndex = 0;
-    hostiles.push({
-      kind: 'hale',
-      pos: halePos,
-      yaw: 0,
-      route: keep.map(cellCenter),
-    });
+    hostiles.push({ kind: 'hale', pos: { ...start }, yaw: 0, route: route.length ? route : [start] });
     const escorts = g.baseEscorts + Math.max(0, Math.min(g.maxGrudgeEscorts, opts.extraEscorts ?? 0));
     for (let k = 0; k < escorts; k++) {
       const ang = (k / escorts) * Math.PI * 2;
-      hostiles.push({
-        kind: 'escort',
-        pos: v3(halePos.x + Math.cos(ang) * 1.8, 0, halePos.z + Math.sin(ang) * 1.8),
-        yaw: 0,
-        route: [],
-        escortOf: 0,
-      });
+      hostiles.push({ kind: 'escort', pos: v3(start.x + Math.cos(ang) * 1.8, start.y, start.z + Math.sin(ang) * 1.8), yaw: 0, route: [], escortOf: 0 });
     }
+    for (const n of keepNodes) used.add(n);
   }
   const regulars = isCastel ? Math.max(0, total - 1 - g.baseEscorts) : total;
-  const spawnCells = placeRng.shuffle(walkCells.filter((c) => farFromEntrance(c) && c.tag !== 'keep'));
-  const perCell = new Map<Cell, number>();
-  for (let k = 0; k < regulars && spawnCells.length; k++) {
-    // Round-robin over cells so hostiles spread out; at most 2 per cell.
-    let c: Cell | undefined;
-    for (let tries = 0; tries < spawnCells.length; tries++) {
-      const cand = spawnCells[(k + tries) % spawnCells.length]!;
-      if ((perCell.get(cand) ?? 0) < 2) {
-        c = cand;
-        break;
-      }
+  const decks = [...nav.nodes.keys()].filter((n) => nav.tags[n] === 'deck');
+  const sentries = Math.min(decks.length ? Math.round(regulars * g.sentryShare) : 0, Math.floor(decks.length / 3));
+  // The occupation watches the routes: posts favour the main path, its neighbours, and canal bridges.
+  const nearPath = new Set<number>();
+  for (const ci of pathCells) {
+    nearPath.add(ci);
+    const c = cells[ci]!;
+    for (const d of ALL_DIRS) {
+      const n = neighbor(cells, c, d);
+      if (n && c.conn[d]) nearPath.add(idx(n.i, n.j));
     }
-    if (!c) break;
-    perCell.set(c, (perCell.get(c) ?? 0) + 1);
-    const route = routeFrom(cells, c, placeRng, opts.type === 'quartieri' ? 2 : 3);
-    const start = route[0]!;
-    const jitter = (perCell.get(c) ?? 1) > 1 ? 1.2 : 0;
-    hostiles.push({
-      kind: hostileKindFor(opts.type, placeRng),
-      pos: v3(start.x + jitter, 0, start.z + jitter),
-      yaw: placeRng.range(-Math.PI, Math.PI),
-      route,
-    });
+  }
+  const postScore = (n: number) => {
+    const ci = nav.cells[n]!;
+    const c = cells[ci]!;
+    return (pathSet.has(ci) ? 1.6 : nearPath.has(ci) ? 0.9 : 0) + (c.type === 'canal' && c.bridge ? 0.6 : 0) + placeRng.next();
+  };
+  const posts = [
+    ...pickNodes(decks, sentries, 30, (n) => postScore(n)),
+    ...pickNodes(
+      ground.filter((n) => !isKeep(n)),
+      regulars - sentries,
+      30,
+      postScore,
+    ),
+  ];
+  for (const n of posts) {
+    const stationary = placeRng.chance(0.25);
+    const route = stationary ? [nav.nodes[n]!] : routeFrom(nav, n, placeRng, placeRng.int(1, 3), new Set());
+    hostiles.push({ kind: hostileKindFor(opts.type, placeRng), pos: { ...nav.nodes[n]! }, yaw: placeRng.range(-Math.PI, Math.PI), route: route.map((p) => ({ ...p })) });
   }
 
-  const reserved: V3[] = [...caches.map((c) => c.pos), entrancePos];
-  if (exitPos) reserved.push(exitPos);
-  if (intel) reserved.push(intel.pos);
-  if (lucca) reserved.push(lucca.pos);
-  if (lucretia) reserved.push(lucretia.pos);
-  const boxes = buildGeometry(cells, geoRng, opts.type, reserved);
+  // Civilians: the city keeps living around the occupation.
+  const civ = tuning.civilians;
+  const civCount = civ[opts.type];
+  const civPool = placeRng.shuffle(ground.filter((n) => !isKeep(n) && dist(nav.nodes[n]!, entrancePos) > 8));
+  const civilians: CivilianSpawn[] = [];
+  const rumorAt = new Set([placeRng.int(0, Math.max(0, civCount - 1)), placeRng.int(0, Math.max(0, civCount - 1))]);
+  for (let k = 0; k < civCount && civPool.length; k++) {
+    const n = civPool[k % civPool.length]!;
+    const p = spotNear(n);
+    civilians.push({ pos: p, yaw: placeRng.range(-Math.PI, Math.PI), look: placeRng.int(0, 1 << 20), rumor: rumorAt.has(k), idle: placeRng.chance(civ.idleShare) || nav.tags[n] === 'bench' });
+  }
 
   // Face into the area from the entrance.
-  const firstStep = pathCells[1] !== undefined ? cells[pathCells[1]]! : null;
-  const entranceYaw = firstStep ? Math.atan2(firstStep.i - entrance.i, firstStep.j - entrance.j) : 0;
+  const next = nav.links[entranceNode]!.map((n) => nav.nodes[n]!).sort((a, b) => dist(a, nav.nodes[goalNode]!) - dist(b, nav.nodes[goalNode]!))[0];
+  const entranceYaw = next ? Math.atan2(next.x - entrancePos.x, next.z - entrancePos.z) : 0;
 
   return {
     type: opts.type,
     index: opts.index,
     seed,
     gridSize: N(),
-    blockSize: B(),
+    blockSize: S(),
     cells,
-    boxes,
+    boxes: builder.boxes,
+    decor: builder.decor,
+    nav: { nodes: nav.nodes, links: nav.links },
     entrance: entrancePos,
     entranceYaw,
     exit: exitPos,
     pathCells,
     hostiles,
+    civilians,
     caches,
     intel,
     castSpots: { lucca, lucretia },
@@ -698,5 +714,4 @@ export function castAppears(seed: number, who: 'lucca' | 'lucretia', areaIndex: 
   return new Rng(hashSeed(seed, who, areaIndex)).chance(tuning.gen.castAppearChance);
 }
 
-export { idx as cellIndex };
-export type { CellType };
+export type { NodeHint };

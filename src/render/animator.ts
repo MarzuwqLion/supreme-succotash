@@ -1,5 +1,5 @@
 import { tuning } from '../data/tuning';
-import type { Hostile, Player } from '../sim/entities';
+import type { Civilian, Hostile, Player } from '../sim/entities';
 import { POSES, blendPose, ease, overlayUpper, type Pose } from './rig';
 
 /**
@@ -48,8 +48,13 @@ export function playerPose(p: Player, loco: LocomotionPhase, recentShot: boolean
     }
     case 'heavy':
       return phaseOf(a.frame, m.heavy.startup, m.heavy.active, m.heavy.recovery, P('heavyWind'), P('heavyHit'));
-    case 'dodge':
-      return a.frame < m.dodgeTotal - 5 ? P('dodge') : blendPose(P('dodge'), P('idle'), (a.frame - (m.dodgeTotal - 5)) / 5);
+    case 'dodge': {
+      // Forward roll: tuck, one full somersault over the travel frames, stand up.
+      const travel = Math.max(1, m.dodgeTotal - 4);
+      const t = Math.min(1, a.frame / travel);
+      const tuck = a.frame < 3 ? blendPose(P('idle'), P('tuck'), a.frame / 3) : a.frame < travel ? P('tuck') : blendPose(P('tuck'), P('idle'), (a.frame - travel) / 4);
+      return { ...tuck, tumble: ease(t) * Math.PI * 2 };
+    }
     case 'takedown':
       return a.frame < 8 ? blendPose(P('idle'), P('grab'), a.frame / 8) : blendPose(P('grab'), P('takedown'), Math.min(1, (a.frame - 8) / 12));
     case 'execution': {
@@ -68,6 +73,12 @@ export function playerPose(p: Player, loco: LocomotionPhase, recentShot: boolean
       break;
   }
   const base = loco.pose(p.speed);
+  if (p.cover) {
+    const c = p.cover;
+    if (c.low) return c.expose > 0.5 ? blendPose(P('crouch'), P('aim'), c.expose) : P('coverLow');
+    return c.expose > 0.3 ? overlayUpper(base, P('aim')) : overlayUpper(base, P('coverHigh'));
+  }
+  if (p.talking) return P(Math.sin(performance.now() / 900) > 0 ? 'talk' : 'talkB');
   if (p.blocking) return overlayUpper(base, p.parryFrame >= 0 ? P('parry') : P('block'));
   if (p.aiming || recentShot) return overlayUpper(base, P('aim'));
   return base;
@@ -100,4 +111,11 @@ export function hostilePose(h: Hostile, loco: LocomotionPhase, speed: number): P
   if (h.state === 'alert') return overlayUpper(base, h.kind === 'legionary' ? P('idle') : P('aimRifle'));
   if (speed < 0.2 && h.state === 'patrol' && h.detection > 0.3) return P('lookAround');
   return base;
+}
+
+export function civilianPose(c: Civilian, loco: LocomotionPhase, speed: number, talking: boolean): Pose {
+  if (c.state === 'cower') return P('cower');
+  if (talking) return P(Math.sin(performance.now() / 700 + c.id) > 0 ? 'talk' : 'talkB');
+  if (speed > 0.2) return loco.pose(speed);
+  return (c.look & 1) === 0 ? P('idleClasp') : P('idle');
 }

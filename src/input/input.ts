@@ -20,6 +20,7 @@ export const ACTIONS = [
   'interact',
   'swapPrev',
   'swapNext',
+  'camera',
   'swap1',
   'swap2',
   'useItem',
@@ -75,16 +76,16 @@ const KEY_MAP: Record<string, Action[]> = {
   KeyT: ['reload'],
   Escape: ['pause', 'back'],
   Backquote: ['debug'],
+  KeyV: ['camera'],
   Enter: ['confirm'],
   ArrowUp: ['up'],
   ArrowDown: ['down'],
   ArrowLeft: ['left'],
   ArrowRight: ['right'],
-  KeyW: ['up'],
-  KeyS: ['down'],
-  KeyA: ['left'],
-  KeyD: ['right'],
 };
+
+/** Keys that also navigate menus (but not conversations, where WASD means walking away). */
+export const MENU_WASD: Record<string, 'up' | 'down' | 'left' | 'right'> = { KeyW: 'up', KeyS: 'down', KeyA: 'left', KeyD: 'right' };
 
 // Standard gamepad mapping (Xbox layout).
 const PAD_MAP: Record<number, Action[]> = {
@@ -102,8 +103,8 @@ const PAD_MAP: Record<number, Action[]> = {
   11: ['lockOn'], // R3
   12: ['useItem', 'up'], // D-pad up
   13: ['reload', 'down'], // D-pad down
-  14: ['swapPrev', 'left'], // D-pad left
-  15: ['swapNext', 'right'], // D-pad right
+  14: ['swapPrev', 'left'], // D-pad left: swap weapon
+  15: ['camera', 'right'], // D-pad right: toggle over-the-shoulder camera
 };
 
 const DEADZONE = 0.18;
@@ -128,6 +129,8 @@ export class InputSystem {
   private prevPadButtons: boolean[] = [];
   /** When false, keyboard/mouse game actions are ignored (e.g. typing in debug panel). */
   enabled = true;
+  /** WASD also moves menu focus (FOB, pause); off in conversations so WASD walks away. */
+  wasdNavigates = true;
 
   constructor(private readonly target: HTMLElement) {
     window.addEventListener('keydown', (e) => {
@@ -139,6 +142,8 @@ export class InputSystem {
       if (!this.keys.has(e.code)) {
         this.keys.add(e.code);
         for (const a of KEY_MAP[e.code] ?? []) this.latchedPress[a] = true;
+        const nav = MENU_WASD[e.code];
+        if (nav && this.wasdNavigates) this.latchedPress[nav] = true;
       }
       this.lastDevice = 'kbm';
     });

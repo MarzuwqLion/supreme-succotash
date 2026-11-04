@@ -108,3 +108,21 @@ export interface AreaFlavor {
   quartieri: string;
   castel: string;
 }
+
+/** Lines for passers-by. Barks, not conversations: one line per talk, no trust. */
+export interface CivilianLines {
+  /** Ordinary chatter when the agent talks to a passer-by. */
+  idle: string[];
+  /** Used instead of idle when the area's suspicion is 50 or higher. */
+  nervous: string[];
+  /** Rumours about a hidden stash; the game then marks a real cache on the HUD. */
+  rumors: string[];
+}
+
+export interface CivilianContent {
+  areas: Record<'porto' | 'spaccanapoli' | 'quartieri' | 'castel', CivilianLines>;
+  /** Shouted while running from violence. */
+  flee: string[];
+  /** Said when talked to while hiding after a fight. */
+  cowering: string[];
+}

@@ -1,4 +1,4 @@
-import { add, angleDiff, clamp, distXZ, forwardFromYaw, normalizeXZ, rightFromYaw, scale, sub, turnToward, v3, yawTo, type V3 } from '../core/vec';
+import { add, angleDiff, clamp, distXZ, dot, forwardFromYaw, normalizeXZ, rightFromYaw, scale, sub, turnToward, v3, yawTo, type V3 } from '../core/vec';
 import { tuning, type MoveFrames } from '../data/tuning';
 import type { InputFrame } from '../input/input';
 import { gunDamage } from './damage';
@@ -39,9 +39,15 @@ function updateView(w: SimWorld, input: InputFrame): void {
   const p = w.player;
   const cam = tuning.camera;
   p.viewPitch = clamp(p.viewPitch + input.look.y, (tuning.player.pitchMinDeg * Math.PI) / 180, (tuning.player.pitchMaxDeg * Math.PI) / 180);
+  if (input.pressed.camera) {
+    p.viewStyle = p.viewStyle === 'classic' ? 'shoulder' : 'classic';
+    if (p.viewStyle === 'shoulder') p.lockTarget = null;
+  }
   const target = w.hostile(p.lockTarget);
   if (input.pressed.lockOn) {
-    if (p.lockTarget !== null) p.lockTarget = null;
+    // The shoulder camera doesn't lock on; R3 / middle mouse swaps shoulders instead.
+    if (p.viewStyle === 'shoulder') p.shoulder = p.shoulder === 1 ? -1 : 1;
+    else if (p.lockTarget !== null) p.lockTarget = null;
     else p.lockTarget = pickLockTarget(w);
   }
   if (alive(target) && distXZ(target.pos, p.pos) <= cam.lockOnBreakRange) {
@@ -62,7 +68,7 @@ function pickLockTarget(w: SimWorld): number | null {
     if (d > tuning.camera.lockOnRange) continue;
     const ang = Math.abs(angleDiff(p.viewYaw, yawTo(p.pos, h.pos)));
     if (ang > (75 * Math.PI) / 180) continue;
-    if (!w.physics.clearLine(v3(p.pos.x, 1.5, p.pos.z), v3(h.pos.x, 1.5, h.pos.z))) continue;
+    if (!w.physics.clearLine(v3(p.pos.x, p.pos.y + 1.5, p.pos.z), v3(h.pos.x, h.pos.y + 1.5, h.pos.z))) continue;
     const score = d + ang * 8;
     if (!best || score < best.score) best = { id: h.id, score };
   }
@@ -91,11 +97,12 @@ function locomote(w: SimWorld, input: InputFrame): void {
   const nd = normalizeXZ(dir);
   const step = moving ? speed * Math.max(mag, 0.6) * DT() : 0;
   if (moving) w.physics.move(p.body, nd.x * step, nd.z * step);
+  else w.physics.move(p.body, 0, 0); // gravity
   p.speed = moving ? speed * Math.max(mag, 0.6) : 0;
 
   const turn = ((pt.turnRateDegPerSec * Math.PI) / 180) * DT();
   const lock = w.hostile(p.lockTarget);
-  if (p.aiming) p.yaw = turnToward(p.yaw, p.viewYaw, turn * 2);
+  if (p.aiming || (p.viewStyle === 'shoulder' && moving)) p.yaw = turnToward(p.yaw, p.viewYaw, turn * 2);
   else if (alive(lock)) p.yaw = turnToward(p.yaw, yawTo(p.pos, lock.pos), turn);
   else if (moving) p.yaw = turnToward(p.yaw, Math.atan2(nd.x, nd.z), turn);
 }
@@ -112,6 +119,7 @@ function pickMeleeTarget(w: SimWorld, input: InputFrame): Hostile | null {
   let best: { h: Hostile; score: number } | null = null;
   for (const h of w.hostiles) {
     if (h.state === 'dead' || h.combat === 'grabbed') continue;
+    if (Math.abs(h.pos.y - p.pos.y) > 1.0) continue;
     const d = distXZ(h.pos, p.pos);
     if (d > range) continue;
     const ang = Math.abs(angleDiff(pref, yawTo(p.pos, h.pos)));
@@ -138,6 +146,7 @@ function startHeavy(w: SimWorld, input: InputFrame): void {
   if (t) p.yaw = yawTo(p.pos, t.pos);
 }
 
+/** A forward roll: the agent always turns into the direction of travel. */
 function startDodge(w: SimWorld, input: InputFrame): void {
   const p = w.player;
   const dir = moveDirWorld(p, input);
@@ -145,7 +154,123 @@ function startDodge(w: SimWorld, input: InputFrame): void {
   p.action = { kind: 'dodge', frame: 0, dir: d };
   p.blocking = false;
   p.parryFrame = -1;
-  if (p.lockTarget === null) p.yaw = Math.atan2(d.x, d.z);
+  p.cover = null;
+  p.crouched = false;
+  p.yaw = Math.atan2(d.x, d.z);
+}
+
+// ------------------------------------------------------------------ cover
+
+const COVER_REACH = 1.4;
+
+interface CoverProbe {
+  normal: V3;
+  low: boolean;
+  point: V3;
+}
+
+/** Is there something to take cover behind in `dir` from `from` (feet position)? */
+function coverProbe(w: SimWorld, from: V3, dir: V3, reach = COVER_REACH): CoverProbe | null {
+  const low = w.physics.raycastNormal(v3(from.x, from.y + 0.6, from.z), dir, reach);
+  if (!low || Math.abs(low.normal.y) > 0.35) return null;
+  // Too low to hide behind (benches, kerbs)?
+  if (!w.physics.raycastNormal(v3(from.x, from.y + 0.85, from.z), dir, low.distance + 0.3)) return null;
+  const high = w.physics.raycastNormal(v3(from.x, from.y + 1.45, from.z), dir, low.distance + 0.45);
+  const normal = normalizeXZ(low.normal);
+  if (Math.hypot(normal.x, normal.z) < 0.5) return null;
+  return { normal, low: !high, point: low.point };
+}
+
+function coverCandidate(w: SimWorld, input: InputFrame): CoverProbe | null {
+  const p = w.player;
+  const dir = moveDirWorld(p, input);
+  const d = Math.hypot(dir.x, dir.z) > 0.3 ? normalizeXZ(dir) : forwardFromYaw(p.yaw);
+  const probe = coverProbe(w, p.pos, d);
+  if (!probe) return null;
+  // Must be roughly facing the cover.
+  if (dot(d, scale(probe.normal, -1)) < 0.5) return null;
+  return probe;
+}
+
+function enterCover(w: SimWorld, probe: CoverProbe): void {
+  const p = w.player;
+  const r = p.body.radius + 0.06;
+  p.cover = {
+    normal: probe.normal,
+    low: probe.low,
+    edge: 0,
+    expose: 0,
+    pullAway: 0,
+    frames: 0,
+    snap: v3(probe.point.x + probe.normal.x * r, p.pos.y, probe.point.z + probe.normal.z * r),
+    lean: 0,
+  };
+  p.aiming = false;
+  p.blocking = false;
+  p.sprinting = false;
+}
+
+/** Slide along cover, pop up or lean out to shoot, leave by pulling away. Returns false if cover was lost. */
+function updateCover(w: SimWorld, input: InputFrame): boolean {
+  const p = w.player;
+  const c = p.cover!;
+  c.frames++;
+  const t = v3(c.normal.z, 0, -c.normal.x);
+  if (c.snap) {
+    const d = sub(c.snap, p.pos);
+    const len = Math.hypot(d.x, d.z);
+    if (len < 0.05 || c.frames > 14) c.snap = null;
+    else {
+      const step = Math.min(len, 5 * DT());
+      w.physics.move(p.body, (d.x / len) * step, (d.z / len) * step);
+    }
+  }
+  const dir = moveDirWorld(p, input);
+  const along = dot(dir, t);
+  const away = dot(dir, c.normal);
+  if (away > 0.55 && Math.abs(along) < 0.6) {
+    if (++c.pullAway > 8) {
+      p.cover = null;
+      return false;
+    }
+  } else c.pullAway = 0;
+  const wantExpose = p.aiming || w.frame - p.lastShotFrame < 25;
+  c.expose = clamp(c.expose + (wantExpose ? 7 : -7) * DT(), 0, 1);
+  p.speed = 0;
+  if (!wantExpose && !c.snap && Math.abs(along) > 0.25 && Math.abs(c.lean) < 0.05) {
+    const s = Math.sign(along);
+    const step = tuning.player.coverMoveSpeed * DT() * Math.min(1, Math.abs(along) * 1.3);
+    const ahead = v3(p.pos.x + t.x * s * (step + 0.32), p.pos.y, p.pos.z + t.z * s * (step + 0.32));
+    const probe = coverProbe(w, ahead, scale(c.normal, -1), 0.9);
+    if (probe && probe.low === c.low) {
+      w.physics.move(p.body, t.x * s * step - c.normal.x * 0.01, t.z * s * step - c.normal.z * 0.01);
+      c.normal = normalizeXZ(add(scale(c.normal, 0.8), scale(probe.normal, 0.2)));
+      c.edge = 0;
+      p.speed = tuning.player.coverMoveSpeed;
+    } else c.edge = s as -1 | 1;
+  } else if (!c.snap) w.physics.move(p.body, 0, 0);
+  // Lean past the edge of high cover while aiming.
+  if (!c.low && c.edge !== 0) {
+    const want = c.expose * tuning.player.coverLean * c.edge;
+    const delta = want - c.lean;
+    if (Math.abs(delta) > 0.01) {
+      const step = clamp(delta, -4 * DT(), 4 * DT());
+      w.physics.move(p.body, t.x * step, t.z * step);
+      c.lean += step;
+    }
+  }
+  if (!c.snap && c.expose < 0.1 && Math.abs(c.lean) < 0.05) {
+    const probe = coverProbe(w, p.pos, scale(c.normal, -1), 0.9);
+    if (!probe) {
+      p.cover = null;
+      return false;
+    }
+    c.low = probe.low;
+  }
+  const turn = ((tuning.player.turnRateDegPerSec * Math.PI) / 180) * DT();
+  p.yaw = wantExpose ? turnToward(p.yaw, p.viewYaw, turn * 2) : turnToward(p.yaw, Math.atan2(-c.normal.x, -c.normal.z), turn);
+  p.crouched = c.low && c.expose < 0.5;
+  return true;
 }
 
 /** Lunge toward the target during startup so strikes connect. */
@@ -167,6 +292,7 @@ function strikeConnects(w: SimWorld, target: Hostile | null): target is Hostile 
   if (!alive(target) || target.combat === 'grabbed') return false;
   const d = distXZ(p.pos, target.pos);
   if (d > tuning.melee.reach + tuning.hostiles.capsuleRadius) return false;
+  if (Math.abs(target.pos.y - p.pos.y) > 1.0) return false;
   const ang = Math.abs(angleDiff(p.yaw, yawTo(p.pos, target.pos)));
   return ang <= (tuning.melee.arcDeg * Math.PI) / 360;
 }
@@ -188,7 +314,7 @@ function runStrike(
     a.hit = true;
     w.damageHostile(target, damage, 'melee', hitstun);
     w.applySuspicion(w.suspicion.melee());
-    w.emit({ type: 'impact', pos: v3(target.pos.x, 1.2, target.pos.z), kind: 'melee' });
+    w.emit({ type: 'impact', pos: v3(target.pos.x, target.pos.y + 1.2, target.pos.z), kind: 'melee' });
   }
   // Point-blank shot: RT during a strike snaps a shot at the melee target, once per strike.
   if (input.pressed.fire && !a.pbFired && alive(target) && canShoot(w.player)) {
@@ -295,14 +421,14 @@ function afterShot(w: SimWorld): void {
 function muzzle(p: Player): V3 {
   const f = forwardFromYaw(p.yaw);
   const r = rightFromYaw(p.yaw);
-  return v3(p.pos.x + f.x * 0.5 + r.x * 0.25, 1.35, p.pos.z + f.z * 0.5 + r.z * 0.25);
+  return v3(p.pos.x + f.x * 0.5 + r.x * 0.25, p.pos.y + (p.crouched ? 0.9 : 1.35), p.pos.z + f.z * 0.5 + r.z * 0.25);
 }
 
 function pointBlankShot(w: SimWorld, target: Hostile): void {
   const round = consumeRound(w);
   if (!round) return;
   const p = w.player;
-  const to = v3(target.pos.x, 1.2, target.pos.z);
+  const to = v3(target.pos.x, target.pos.y + 1.2, target.pos.z);
   w.damageHostile(target, round.damage, 'gun', 6);
   w.emit({ type: 'shot', from: muzzle(p), to, loud: round.loud, byPlayer: true, hit: true });
   gunNoise(w, round.loud);
@@ -310,13 +436,20 @@ function pointBlankShot(w: SimWorld, target: Hostile): void {
 }
 
 /** Where the aim ray starts and points, from sim state only (never the render camera). */
+/** Camera parameters the sim aims with (same numbers the presentation camera uses). */
+export function viewParams(p: Player): { distance: number; height: number; side: number; fov: number } {
+  const c = tuning.camera;
+  const base = p.viewStyle === 'shoulder' ? (p.aiming ? c.shoulderAim : c.shoulder) : p.aiming ? c.aim : c.explore;
+  return { ...base, side: base.side * (p.viewStyle === 'shoulder' ? p.shoulder : 1) };
+}
+
 export function aimRay(p: Player): { origin: V3; dir: V3 } {
-  const cam = p.aiming ? tuning.camera.aim : tuning.camera.explore;
+  const cam = viewParams(p);
   const r = rightFromYaw(p.viewYaw);
   const cp = Math.cos(p.viewPitch);
   const dir = v3(Math.sin(p.viewYaw) * cp, Math.sin(p.viewPitch), Math.cos(p.viewYaw) * cp);
   // Start at the camera pivot (beside the shoulder) so walls behind the agent don't eat shots.
-  const origin = v3(p.pos.x + r.x * cam.side, cam.height, p.pos.z + r.z * cam.side);
+  const origin = v3(p.pos.x + r.x * cam.side, p.pos.y + cam.height, p.pos.z + r.z * cam.side);
   return { origin, dir };
 }
 
@@ -329,7 +462,7 @@ function fireAimed(w: SimWorld): void {
   let dir: V3;
   if (!p.aiming && alive(lock)) {
     origin = muzzle(p);
-    const to = v3(lock.pos.x, 1.25, lock.pos.z);
+    const to = v3(lock.pos.x, lock.pos.y + 1.25, lock.pos.z);
     const d = sub(to, origin);
     const l = Math.hypot(d.x, d.y, d.z);
     dir = scale(d, 1 / l);
@@ -421,6 +554,16 @@ export function updatePlayer(w: SimWorld, input: InputFrame): void {
   if (p.dead) return;
   const m = tuning.melee;
   if (p.hurtFlash > 0) p.hurtFlash--;
+  if (p.talking) {
+    // In a conversation the world keeps going, but the agent stands and talks.
+    p.speed = 0;
+    p.aiming = false;
+    p.blocking = false;
+    p.sprinting = false;
+    w.physics.move(p.body, 0, 0);
+    p.coverHint = null;
+    return;
+  }
   updateView(w, input);
   if (p.fireCooldown > 0) p.fireCooldown--;
   if (p.swap > 0) p.swap--;
@@ -534,7 +677,7 @@ export function updatePlayer(w: SimWorld, input: InputFrame): void {
         } else if (a.frame === m.throwLandFrame) {
           h.combat = 'knockdown';
           h.combatFrames = m.throwKnockdown;
-          w.emit({ type: 'impact', pos: v3(h.pos.x, 0.3, h.pos.z), kind: 'melee' });
+          w.emit({ type: 'impact', pos: v3(h.pos.x, h.pos.y + 0.3, h.pos.z), kind: 'melee' });
           w.damageHostile(h, m.throwDamage, 'throw', 0);
           if (alive(h)) {
             h.combat = 'knockdown';
@@ -552,6 +695,7 @@ export function updatePlayer(w: SimWorld, input: InputFrame): void {
     case 'hitstun': {
       a.frame++;
       p.blocking = false;
+      w.physics.move(p.body, 0, 0);
       if (a.frame >= a.duration) p.action = { kind: 'none' };
       else return;
       break;
@@ -559,28 +703,71 @@ export function updatePlayer(w: SimWorld, input: InputFrame): void {
   }
 
   // ---------------- neutral
+  const slot = p.weapons[p.slot];
+  const auto = slot ? tuning.weapons[slot.id].automatic : false;
+  const wantsFire = input.pressed.fire || (auto && !!input.held.fire);
+
+  if (p.cover) {
+    // Leaving cover: roll out with A + a direction, or start any melee move.
+    const dir = moveDirWorld(p, input);
+    if (input.pressed.dodge) {
+      p.cover = null;
+      p.crouched = false;
+      if (Math.hypot(dir.x, dir.z) > 0.3) return startDodge(w, input);
+    } else if (input.pressed.light || input.pressed.heavy || input.pressed.block || input.held.sprint) {
+      p.cover = null;
+      p.crouched = false;
+    } else if (input.pressed.context && p.context.action) {
+      p.cover = null;
+      p.crouched = false;
+      if (startContext(w)) return;
+    } else {
+      p.blocking = false;
+      p.aiming = !!input.held.aim;
+      p.coverHint = null;
+      if (updateCover(w, input)) {
+        handleItems(w, input, true);
+        if (input.pressed.interact) {
+          w.interact();
+          return;
+        }
+        if (wantsFire) {
+          if (slot && slot.mag === 0) startReload(p);
+          else fireAimed(w);
+        }
+        return;
+      }
+      p.crouched = false;
+    }
+  }
+
   p.blocking = !!input.held.block;
   if (input.pressed.block && p.parryLockout === 0) {
     p.parryFrame = 0;
     p.parryLockout = m.parryRepressLockout;
   }
   p.aiming = !!input.held.aim && !p.blocking;
+  p.crouched = false;
   locomote(w, input);
   handleItems(w, input, true);
+  const cover = coverCandidate(w, input);
+  p.coverHint = cover ? { low: cover.low } : null;
 
   if (input.pressed.interact) {
     w.interact();
     return;
   }
   if (input.pressed.context && startContext(w)) return;
-  if (input.pressed.dodge) return startDodge(w, input);
+  if (input.pressed.dodge) {
+    // A next to cover takes cover; otherwise it's a roll.
+    if (cover && !p.sprinting) return enterCover(w, cover);
+    return startDodge(w, input);
+  }
   if (!p.blocking) {
     if (input.pressed.light) return startLight(w, input, 0);
     if (input.pressed.heavy) return startHeavy(w, input);
   }
-  const slot = p.weapons[p.slot];
-  const auto = slot ? tuning.weapons[slot.id].automatic : false;
-  if (!p.blocking && (input.pressed.fire || (auto && input.held.fire))) {
+  if (!p.blocking && wantsFire) {
     if (slot && slot.mag === 0) startReload(p);
     else fireAimed(w);
   }

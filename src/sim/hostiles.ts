@@ -1,4 +1,4 @@
-import { angleDiff, clone, distXZ, forwardFromYaw, lerp, normalizeXZ, rightFromYaw, sub, turnToward, v3, yawTo, type V3 } from '../core/vec';
+import { angleDiff, clone, dist, distXZ, forwardFromYaw, lerp, normalizeXZ, rightFromYaw, sub, turnToward, v3, yawTo, type V3 } from '../core/vec';
 import { tuning } from '../data/tuning';
 import type { Hostile } from './entities';
 import type { SimWorld } from './world';
@@ -25,17 +25,7 @@ function face(h: Hostile, target: V3, degPerSec = 540): void {
 
 /** Is a capsule-wide straight walk from a to b free of walls? */
 export function walkable(w: SimWorld, a: V3, b: V3): boolean {
-  const d = distXZ(a, b);
-  if (d < 0.05) return true;
-  const nx = (b.x - a.x) / d;
-  const nz = (b.z - a.z) / d;
-  const off = tuning.hostiles.capsuleRadius;
-  for (const s of [-off, 0, off]) {
-    const ox = -nz * s;
-    const oz = nx * s;
-    if (!w.physics.clearLine(v3(a.x + ox, 0.9, a.z + oz), v3(b.x + ox, 0.9, b.z + oz))) return false;
-  }
-  return true;
+  return w.walkClear(a, b);
 }
 
 /** Walk toward `target` using the cell graph. Returns true when arrived. */
@@ -49,12 +39,12 @@ function moveTo(w: SimWorld, h: Hostile, target: V3, speed: number, arriveDist =
   if (!h.path.length || !h.pathTarget || distXZ(h.pathTarget, target) > 2 || h.pathAge > 90) {
     h.path = w.nav.waypoints(h.pos, target);
     // String-pull: skip waypoints we can walk past in a straight line.
-    while (h.path.length >= 2 && walkable(w, h.pos, h.path[1]!)) h.path.shift();
+    while (h.path.length >= 2 && Math.abs(h.path[1]!.y - h.pos.y) < 0.5 && Math.abs(h.path[0]!.y - h.pos.y) < 0.5 && walkable(w, h.pos, h.path[1]!)) h.path.shift();
     h.pathTarget = clone(target);
     h.pathAge = 0;
   }
   let wp = h.path[0];
-  while (wp && h.path.length > 1 && distXZ(h.pos, wp) < 0.6) {
+  while (wp && h.path.length > 1 && distXZ(h.pos, wp) < 0.6 && Math.abs(h.pos.y - wp.y) < 1.5) {
     h.path.shift();
     wp = h.path[0];
   }
@@ -90,8 +80,8 @@ export function avoidCharacters(w: SimWorld, self: { id: number; pos: V3 }, dir:
     ax += (-dx / d) * k * 0.6 + rx * k;
     az += (-dz / d) * k * 0.6 + rz * k;
   };
-  for (const o of w.hostiles) if (o.state !== 'dead' && o.body) consider(o.id, o.pos);
-  if (!w.player.dead) consider(w.player.id, w.player.pos);
+  for (const o of w.hostiles) if (o.state !== 'dead' && o.state !== 'stoodDown' && o.body && Math.abs(o.pos.y - self.pos.y) < 1.5) consider(o.id, o.pos);
+  if (!w.player.dead && Math.abs(w.player.pos.y - self.pos.y) < 1.5) consider(w.player.id, w.player.pos);
   if (ax === 0 && az === 0) return dir;
   return normalizeXZ(v3(dir.x + ax, 0, dir.z + az));
 }
@@ -124,7 +114,7 @@ function followRoute(w: SimWorld, h: Hostile, speed: number): void {
       const side = rightFromYaw(hale.yaw);
       const sideSign = idx % 2 === 0 ? 1 : -1;
       const row = 1.4 + Math.floor(idx / 2) * 1.3;
-      const spot = v3(hale.pos.x - back.x * row + side.x * sideSign * 1.3, 0, hale.pos.z - back.z * row + side.z * sideSign * 1.3);
+      const spot = v3(hale.pos.x - back.x * row + side.x * sideSign * 1.3, hale.pos.y, hale.pos.z - back.z * row + side.z * sideSign * 1.3);
       if (!moveTo(w, h, spot, speed * 1.15, 0.8)) return;
       h.yaw = turnToward(h.yaw, hale.yaw + sideSign * deg(35), deg(180) * DT());
       return;
@@ -160,7 +150,7 @@ function followRoute(w: SimWorld, h: Hostile, speed: number): void {
 function patrol(w: SimWorld, h: Hostile): void {
   const ht = tuning.hostiles;
   const p = w.player;
-  const d = distXZ(h.pos, p.pos);
+  const d = dist(h.pos, p.pos);
   const sees = w.canSee(h);
   const sprintNoise = p.sprinting && d <= ht.sprintNoticeRange;
   const bump = d <= ht.peripheralRange;
@@ -208,7 +198,14 @@ function challenge(w: SimWorld, h: Hostile): void {
     h.challengeLostSec = 0;
     h.lastKnown = clone(p.pos);
   } else h.challengeLostSec += DT();
-  const d = distXZ(h.pos, p.pos);
+  const d = dist(h.pos, p.pos);
+  // The agent is already talking to someone: wait your turn nearby.
+  if (p.talking) {
+    h.challengeLostSec = 0;
+    if (d > ht.challengeTalkRange + 1.5) moveTo(w, h, p.pos, h.speed, ht.challengeTalkRange + 1.2);
+    else face(h, p.pos);
+    return;
+  }
   if (h.challengeLostSec > ht.challengeGiveUpSec || d > ht.challengeGiveUpRange) {
     w.emit({ type: 'message', text: 'You dodged a challenge. They are raising the alarm.', tone: 'bad' });
     w.alert(h, h.lastKnown ?? p.pos);
@@ -254,7 +251,7 @@ function runAttack(w: SimWorld, h: Hostile): void {
     if (!atk.hit && atk.frame >= s.startup && atk.frame < s.startup + s.active) {
       const d = distXZ(h.pos, p.pos);
       const ang = Math.abs(angleDiff(h.yaw, yawTo(h.pos, p.pos)));
-      if (d <= s.reach + tuning.player.capsuleRadius && ang <= deg(65) && !p.dead) {
+      if (d <= s.reach + tuning.player.capsuleRadius && ang <= deg(65) && !p.dead && Math.abs(h.pos.y - p.pos.y) < 1.0) {
         atk.hit = true;
         w.hostileMeleeHitsPlayer(h, s.damage);
         if (!h.attack) return; // parried: attack cancelled and attacker staggered
@@ -265,7 +262,7 @@ function runAttack(w: SimWorld, h: Hostile): void {
   }
   const s = rangedSpec(h);
   const eye = w.eye(h);
-  const chest = v3(p.pos.x, 1.2, p.pos.z);
+  const chest = v3(p.pos.x, p.pos.y + (p.crouched ? 0.75 : 1.2), p.pos.z);
   if (atk.frame <= s.aim) {
     face(h, p.pos, 600);
     h.aimPoint = chest;
@@ -285,7 +282,7 @@ function runAttack(w: SimWorld, h: Hostile): void {
       if (w.rng.chance(chance)) hit = w.hostileGunHitsPlayer(s.damage);
     }
     const miss = hit ? chest : v3(chest.x + w.rng.range(-1.2, 1.2), chest.y + w.rng.range(-0.5, 0.8), chest.z + w.rng.range(-1.2, 1.2));
-    w.emit({ type: 'shot', from: v3(h.pos.x, 1.4, h.pos.z), to: miss, loud: true, byPlayer: false, hit });
+    w.emit({ type: 'shot', from: v3(h.pos.x, h.pos.y + 1.4, h.pos.z), to: miss, loud: true, byPlayer: false, hit });
     // Hostile gunfire pulls in anyone within 10 m.
     w.alert(h, p.pos);
   }
@@ -316,7 +313,7 @@ function alertUpdate(w: SimWorld, h: Hostile): void {
     return;
   }
   if (h.attackCooldown > 0) h.attackCooldown--;
-  const d = distXZ(h.pos, p.pos);
+  const d = dist(h.pos, p.pos);
   const run = runSpeedOf(h);
   const meleeCapable = h.kind === 'legionary' || h.kind === 'hale';
   if (sees) {
@@ -359,7 +356,7 @@ function alertUpdate(w: SimWorld, h: Hostile): void {
 function stoodDown(w: SimWorld, h: Hostile): void {
   h.seesPlayer = false;
   h.detection = 0;
-  const d = distXZ(h.pos, w.player.pos);
+  const d = dist(h.pos, w.player.pos);
   if (h.waitFrames > 0 && d < 4) {
     face(h, w.player.pos, 200);
     h.waitFrames--;

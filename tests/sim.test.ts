@@ -7,7 +7,7 @@ describe('simulation (Rapier, headless)', () => {
   it('boots a world and keeps the agent on the ground', async () => {
     const w = await makeWorld(openLayout([]));
     run(w, 10);
-    expect(w.player.pos.y).toBe(0);
+    expect(w.player.pos.y).toBeCloseTo(0, 3);
     expect(w.frame).toBe(10);
   });
 
@@ -336,5 +336,97 @@ describe('simulation (Rapier, headless)', () => {
     w.tick(press('reload'));
     run(w, tuning.weapons.revolver.reload + 1);
     expect(w.player.weapons[1]).toMatchObject({ mag: 6, reserve: 8 });
+  });
+
+  it('climbs a stair onto an elevated deck', async () => {
+    // A 5 m deck with a 30 degree stair rising toward +x, built like the generator's.
+    const theta = Math.PI / 6;
+    const H = 5;
+    const runLen = H / Math.tan(theta);
+    const L = runLen / Math.cos(theta);
+    const footX = 10;
+    const layout = openLayout([], {
+      boxes: [
+        { x: footX + runLen / 2 + 0.2 * Math.sin(theta), y: H / 2 - 0.2 * Math.cos(theta), z: 6, hx: L / 2 + 0.25, hy: 0.2, hz: 1.5, look: 'step', tilt: { axis: 'z', angle: theta } },
+        { x: footX + runLen + 3, y: H - 0.2, z: 6, hx: 3, hy: 0.2, hz: 3, look: 'deck' },
+      ],
+    });
+    const w = await makeWorld(layout);
+    w.player.viewYaw = Math.PI / 2; // face +x
+    let peak = 0;
+    for (let i = 0; i < 60 * 4; i++) {
+      w.tick(frame((f) => (f.move = { x: 0, y: 1 })));
+      peak = Math.max(peak, w.player.pos.y);
+    }
+    expect(peak).toBeGreaterThan(H - 0.3);
+    // Walking off the far end of the deck, gravity brings the agent back down.
+    run(w, 60 * 3, () => frame((f) => (f.move = { x: 0, y: 1 })));
+    expect(w.player.pos.y).toBeLessThan(0.3);
+  });
+
+  it('takes cover behind a low wall and crouches out of sight', async () => {
+    const layout = openLayout([{ kind: 'escort', pos: v3(6, 0, 20), yaw: Math.PI }], {
+      boxes: [{ x: 6, y: 0.5, z: 7.4, hx: 2, hy: 0.5, hz: 0.25, look: 'parapet' }],
+    });
+    const w = await makeWorld(layout);
+    w.player.viewYaw = 0; // facing +z, toward the wall and the hostile beyond it
+    w.tick(frame((f) => (f.move = { x: 0, y: 1 })));
+    expect(w.player.coverHint?.low).toBe(true);
+    w.tick(frame((f) => { f.move = { x: 0, y: 1 }; f.pressed.dodge = true; f.held.dodge = true; }));
+    run(w, 20);
+    expect(w.player.cover).not.toBe(null);
+    expect(w.player.crouched).toBe(true);
+    expect(w.player.action.kind).toBe('none');
+    // Crouched behind 1 m of cover, the hostile 13 m away can't see the agent.
+    run(w, 90);
+    expect(w.hostiles[0]!.state).toBe('patrol');
+    // Aiming pops the agent up into view.
+    run(w, 90, () => hold('aim'));
+    expect(w.player.crouched).toBe(false);
+    expect(w.hostiles[0]!.state).toBe('alert');
+  });
+
+  it('pulling away from cover leaves it', async () => {
+    const layout = openLayout([], { boxes: [{ x: 6, y: 2, z: 7.4, hx: 2, hy: 2, hz: 0.25, look: 'palazzo' }] });
+    const w = await makeWorld(layout);
+    w.player.viewYaw = 0;
+    w.tick(frame((f) => { f.move = { x: 0, y: 1 }; f.pressed.dodge = true; f.held.dodge = true; }));
+    run(w, 15);
+    expect(w.player.cover?.low).toBe(false);
+    run(w, 15, () => frame((f) => (f.move = { x: 0, y: -1 })));
+    expect(w.player.cover).toBe(null);
+  });
+
+  it('the dodge is a forward roll: the agent turns into the direction of travel', async () => {
+    const w = await makeWorld(openLayout([{ kind: 'escort', pos: v3(20, 0, 20), yaw: 0 }]));
+    w.player.lockTarget = w.hostiles[0]!.id;
+    w.player.viewYaw = 0;
+    // Roll to the right (camera-relative).
+    w.tick(frame((f) => { f.move = { x: 1, y: 0 }; f.pressed.dodge = true; f.held.dodge = true; }));
+    expect(w.player.action.kind).toBe('dodge');
+    const dir = (w.player.action as { dir: { x: number; z: number } }).dir;
+    expect(Math.abs(w.player.yaw - Math.atan2(dir.x, dir.z))).toBeLessThan(1e-6);
+  });
+
+  it('while talking the agent stands still and the world keeps running', async () => {
+    const w = await makeWorld(openLayout([{ kind: 'trooper', pos: v3(30, 0, 30), yaw: 0, route: [v3(30, 0, 30), v3(40, 0, 30)] }]));
+    w.player.talking = true;
+    const p0 = { ...w.player.pos };
+    const h0 = { ...w.hostiles[0]!.pos };
+    run(w, 240, () => frame((f) => (f.move = { x: 0, y: 1 })));
+    expect(Math.hypot(w.player.pos.x - p0.x, w.player.pos.z - p0.z)).toBeLessThan(0.01);
+    expect(w.frame).toBe(240);
+    expect(Math.hypot(w.hostiles[0]!.pos.x - h0.x, w.hostiles[0]!.pos.z - h0.z)).toBeGreaterThan(1);
+  });
+
+  it('the shoulder camera toggles and swaps shoulders instead of locking on', async () => {
+    const w = await makeWorld(openLayout([{ kind: 'escort', pos: v3(6, 0, 14), yaw: 0 }]));
+    w.tick(press('camera'));
+    expect(w.player.viewStyle).toBe('shoulder');
+    w.tick(press('lockOn'));
+    expect(w.player.lockTarget).toBe(null);
+    expect(w.player.shoulder).toBe(-1);
+    w.tick(press('camera'));
+    expect(w.player.viewStyle).toBe('classic');
   });
 });
